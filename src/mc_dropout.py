@@ -95,7 +95,7 @@ class _MCDropout(Module):
 
     def _create_mask(self, input, k):
         mask_shape = [1, k] + list(self._get_sample_mask_shape(input.shape[1:]))
-        mask = torch.empty(mask_shape, dtype=torch.uint8, device=input.device).bernoulli_(self.p)
+        mask = torch.empty(mask_shape, dtype=torch.bool, device=input.device).bernoulli_(self.p)
         return mask
 
     def forward(self, input: torch.Tensor):

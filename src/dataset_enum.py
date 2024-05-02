@@ -12,6 +12,7 @@ import torch
 from typing import List
 
 import mnist_model
+import resnet_model_new
 import emnist_model
 import vgg_model
 from active_learning_data import ActiveLearningData
@@ -69,7 +70,10 @@ def get_CINIC10(root="./"):
 
 def get_MNIST():
     # num_classes=10, input_size=28
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+    transform = transforms.Compose([transforms.Resize((48, 48)),
+                                    transforms.ToTensor(),
+                                    transforms.Lambda(lambda x: x.repeat(3, 1, 1)),  # Repeat the single channel across RGB channels
+                                    transforms.Normalize((0.1307,), (0.3081,))])
     train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST("data", train=False, transform=transform)
 
@@ -78,7 +82,10 @@ def get_MNIST():
 
 def get_RepeatedMNIST():
     # num_classes = 10, input_size = 28
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+    transform = transforms.Compose([transforms.Resize((48, 48)),
+                                    transforms.ToTensor(),
+                                    transforms.Lambda(lambda x: x.repeat(3, 1, 1)),  # Repeat the single channel across RGB channels
+                                    transforms.Normalize((0.1307,), (0.3081,))])
     org_train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
     train_dataset = data.ConcatDataset([org_train_dataset] * 3)
 
@@ -191,7 +198,12 @@ class DatasetEnum(enum.Enum):
                 DatasetEnum.repeated_mnist_w_noise5,
                 DatasetEnum.mnist_w_noise,
         ):
-            return mnist_model.BayesianNet(num_classes=num_classes).to(device)
+            # NOTE: Changed this to my resnet model
+            # return mnist_model.BayesianNet(num_classes=num_classes).to(device)
+            return resnet_model.ResNetBay(num_classes=num_classes, pretrained=True, dropout_type='last').to(device)
+            # return resnet_model_new.resnet18(pretrained=True, num_classes=10).to(device)
+            # return vgg_model.vgg16_bn(pretrained=True, num_classes=num_classes).to(device)
+            # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
         elif self in (DatasetEnum.emnist, DatasetEnum.emnist_bymerge):
             return emnist_model.BayesianNet(num_classes=num_classes).to(device)
         elif self == DatasetEnum.cinic10:

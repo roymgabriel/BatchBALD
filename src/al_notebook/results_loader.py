@@ -207,7 +207,7 @@ def load_laaos_files(path=None, files=None, vanilla=False, tag=None, prefix=None
         def nan():
             pass
 
-        store = blackhc.laaos.safe_load(path, expose_symbols=[nan])
+        store = blackhc.laaos.safe_load(path)
         store["actual_name"] = name
         store["actual_path"] = path
         store["tag"] = tag
