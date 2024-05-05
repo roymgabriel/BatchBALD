@@ -12,7 +12,7 @@ import torch
 from typing import List
 
 import mnist_model
-import resnet_model_new
+import resnet_model
 import emnist_model
 import vgg_model
 from active_learning_data import ActiveLearningData
@@ -200,10 +200,11 @@ class DatasetEnum(enum.Enum):
         ):
             # NOTE: Changed this to my resnet model
             # return mnist_model.BayesianNet(num_classes=num_classes).to(device)
-            return resnet_model.ResNetBay(num_classes=num_classes, pretrained=True, dropout_type='last').to(device)
+            # return resnet_model.ResNetBay(num_classes=num_classes, pretrained=True).to(device)
             # return resnet_model_new.resnet18(pretrained=True, num_classes=10).to(device)
             # return vgg_model.vgg16_bn(pretrained=True, num_classes=num_classes).to(device)
             # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
+            return resnet_model.resnet50(pretrained=True, num_classes=10)
         elif self in (DatasetEnum.emnist, DatasetEnum.emnist_bymerge):
             return emnist_model.BayesianNet(num_classes=num_classes).to(device)
         elif self == DatasetEnum.cinic10:
@@ -232,6 +233,7 @@ class DatasetEnum(enum.Enum):
             desc,
             log_interval,
             device,
+            num_classes=num_classes,
             epoch_results_store=None,
     ):
         model = self.create_bayesian_model(device)
@@ -248,6 +250,7 @@ class DatasetEnum(enum.Enum):
             log_interval,
             desc,
             device,
+            num_classes=num_classes,
             epoch_results_store=epoch_results_store,
             **self.create_train_model_extra_args(optimizer),
         )

@@ -127,6 +127,7 @@ def recover_model(laaos_store, target_iteration=None):
         desc,
         log_interval,
         device,
+        num_classes=dataset.num_classes,
     )
 
     return RecoveredModel(

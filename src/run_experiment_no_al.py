@@ -168,6 +168,7 @@ def main():
         desc=desc,
         log_interval=args.log_interval,
         device=device,
+        num_classes=dataset.num_classes,
         epoch_results_store=store,
     )
 

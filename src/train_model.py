@@ -9,14 +9,23 @@ from ignite_utils import epoch_chain, chain, log_epoch_results, store_epoch_resu
 from sampler_model import SamplerModel, NoDropoutModel
 from typing import NamedTuple
 
+from metrics_utils import *
 
 class TrainModelResult(NamedTuple):
     num_epochs: int
     test_metrics: dict
 
 
-def build_metrics():
-    return {"accuracy": ignite.metrics.Accuracy(), "nll": ignite.metrics.Loss(F.nll_loss)}
+def build_metrics(num_classes):
+    return {
+        "accuracy": Accuracy(),
+        "nll": Loss(F.nll_loss),
+        "f1": F1Score(),
+        "precision": Precision(average=True),
+        "recall": Recall(average=True),
+        "ROC AUC": ROC_AUC(num_classes=num_classes),
+        "PRC AUC": PRC_AUC(num_classes=num_classes),
+    }
 
 
 def train_model(
@@ -31,6 +40,7 @@ def train_model(
     log_interval,
     desc,
     device,
+    num_classes,
     lr_scheduler: optim.lr_scheduler._LRScheduler = None,
     num_lr_epochs=0,
     epoch_results_store=None,
@@ -41,7 +51,7 @@ def train_model(
 
     trainer = ignite.engine.create_supervised_trainer(training_sampler, optimizer, F.nll_loss, device=device)
     validation_evaluator = ignite.engine.create_supervised_evaluator(
-        validation_sampler, metrics=build_metrics(), device=device
+        validation_sampler, metrics=build_metrics(num_classes=num_classes), device=device
     )
 
     def out_of_patience():
@@ -68,7 +78,7 @@ def train_model(
     )
 
     if test_loader is not None:
-        test_evaluator = ignite.engine.create_supervised_evaluator(test_sampler, metrics=build_metrics(), device=device)
+        test_evaluator = ignite.engine.create_supervised_evaluator(test_sampler, metrics=build_metrics(num_classes=num_classes), device=device)
         ignite_progress_bar(test_evaluator, desc("Test Eval"), log_interval)
         chain(trainer, test_evaluator, test_loader)
         log_epoch_results(test_evaluator, "Test", trainer)

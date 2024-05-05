@@ -3,7 +3,7 @@ import torch
 import threading
 
 DROPOUT_PROB = 0.5
-
+# DROPOUT_PROB = 0.0
 
 def set_dropout_p(bayesian_net: Module, p):
     def update_k(module: Module):
