@@ -21,6 +21,13 @@ from train_model import train_model
 from transformed_dataset import TransformedDataset
 import subrange_dataset
 
+#TODO: Need to add RSNA dataset
+from rsna_dataset import RSNAPneumoniaDataset
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# TODO: Need to add NIH Chest XRay Dataset
+
 
 @dataclass
 class ExperimentData:
@@ -40,6 +47,77 @@ class DataSource:
     shared_transform: object = None
     train_transform: object = None
     scoring_transform: object = None
+
+
+def get_RSNA(target_col, root="./", seed=9031, train_pct=60, val_pct=20, test_pct=20):
+    # TODO: Might need to use subrange_dataset.py for validation
+    assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
+
+    rsna_directory = root + "data/RSNA"
+    # TODO: Fix these numbers
+    rsna_mean = [0.47889522, 0.47227842, 0.43047404]
+    rsna_std = [0.24205776, 0.23828046, 0.25874835]
+
+    # Define transformations for the images
+    rsna_transform = transforms.Compose([
+        transforms.ToPILImage(),  # Convert numpy array to PIL Image
+        transforms.Resize((256, 256)),  # Resize images to 256x256
+        transforms.ToTensor(),  # Convert images to Tensor
+        transforms.Normalize(mean=rsna_mean, std=rsna_std)  # Normalization
+    ])
+
+    train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4),
+                                          transforms.RandomHorizontalFlip()])
+
+
+    # Load all labels
+    full_dataset = RSNAPneumoniaDataset(
+        csv_file=rsna_directory + '/panel_data_rsna.csv',
+        root_dir=rsna_directory + '/stage_2_train_images',
+        target_col=target_col,
+        transform=rsna_transform,
+    )
+
+    # Calculate split sizes
+    test_size = test_pct / 100
+    val_size = val_pct / (100 - test_pct) if test_pct < 100 else 0
+
+    # Split dataset into train+val and test
+    train_val_indices, test_indices = train_test_split(
+        range(len(full_dataset)), test_size=test_size, random_state=seed, stratify=full_dataset.labels
+    )
+
+    # Split train+val into train and val if validation is needed
+    if val_size > 0:
+        train_indices, val_indices = train_test_split(
+            train_val_indices, test_size=val_size, random_state=seed
+        )
+        val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
+    else:
+        train_indices = train_val_indices
+        val_dataset = None
+
+    # Create dataset views for training, validation (if exists), and testing
+    train_dataset = torch.utils.data.Subset(full_dataset, train_indices)
+    test_dataset = torch.utils.data.Subset(full_dataset, test_indices)
+
+    # # Determine split indices
+    # n = len(full_dataset)
+    # indices = np.random.RandomState(seed).permutation(n)
+    # train_end = int(train_pct / 100 * n)
+    # val_end = train_end + int(val_pct / 100 * n)
+
+    # # Use the custom dataset splitting function
+    # train_dataset, val_dataset, test_dataset = subrange_dataset.dataset_subset_split(full_dataset, [train_end, val_end])
+
+    return DataSource(
+        train_dataset=train_dataset,
+        validation_dataset=val_dataset,
+        test_dataset=test_dataset,
+        train_transform=train_transform,
+        shared_transform=rsna_transform,
+    )
+
 
 
 def get_CINIC10(root="./"):
@@ -102,6 +180,8 @@ class DatasetEnum(enum.Enum):
     repeated_mnist_w_noise5 = "repeated_mnist_w_noise5"
     mnist_w_noise = "mnist_w_noise"
     cinic10 = "cinic10"
+    rsna_binary = "rsna_binary"
+    rsna_multi = "rsna_multi"
 
     def get_data_source(self):
         if self == DatasetEnum.mnist:
@@ -169,6 +249,10 @@ class DatasetEnum(enum.Enum):
             )
         elif self == DatasetEnum.cinic10:
             return get_CINIC10()
+        elif self == DatasetEnum.rsna_binary:
+            return get_RSNA('Target', root="./", seed=9031, train_pct=80, val_pct=5, test_pct=15)
+        elif self == DatasetEnum.rsna_multi:
+            return get_RSNA('class', root="./", seed=9031, train_pct=80, val_pct=5, test_pct=15)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -186,6 +270,10 @@ class DatasetEnum(enum.Enum):
             return 47
         elif self == DatasetEnum.cinic10:
             return 10
+        elif self == DatasetEnum.rsna_binary:
+            return 2
+        elif self == DatasetEnum.rsna_multi:
+            return 3
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -204,16 +292,19 @@ class DatasetEnum(enum.Enum):
             # return resnet_model_new.resnet18(pretrained=True, num_classes=10).to(device)
             # return vgg_model.vgg16_bn(pretrained=True, num_classes=num_classes).to(device)
             # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
-            return resnet_model.resnet50(pretrained=True, num_classes=10)
+            return resnet_model.resnet50(pretrained=False, num_classes=num_classes, bn=True).to(device)
         elif self in (DatasetEnum.emnist, DatasetEnum.emnist_bymerge):
             return emnist_model.BayesianNet(num_classes=num_classes).to(device)
         elif self == DatasetEnum.cinic10:
-            return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
+            return resnet_model.resnet50(pretrained=False, num_classes=num_classes, bn=True).to(device)
+            # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
+        elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
+            return resnet_model.resnet50(pretrained=True, num_classes=num_classes, bn=True).to(device)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
     def create_optimizer(self, model):
-        if self == DatasetEnum.cinic10:
+        if self == DatasetEnum.cinic10 or self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
             optimizer = optim.Adam(model.parameters(), lr=1e-4)
         else:
             optimizer = optim.Adam(model.parameters())

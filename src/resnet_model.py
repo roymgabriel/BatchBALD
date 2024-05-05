@@ -82,7 +82,7 @@ class Bottleneck(nn.Module):
         return out
 
 class ResNet(mc_dropout.BayesianModule):
-    def __init__(self, block, layers, num_classes=1000, init_weights=True):
+    def __init__(self, block, layers, num_classes=1000, init_weights=True, bn=False):
         super().__init__(num_classes)
         self.in_channels = 64
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -94,10 +94,21 @@ class ResNet(mc_dropout.BayesianModule):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Sequential(
-            mc_dropout.MCDropout(),
-            nn.Linear(512 * block.expansion, num_classes),
-        )
+
+        if bn:
+            self.fc = nn.Sequential(
+                mc_dropout.MCDropout(),
+                nn.Linear(512 * block.expansion, 512),
+                nn.BatchNorm1d(512),
+                nn.ReLU(True),
+                nn.Linear(512, num_classes),
+            )
+        else:
+            self.fc = nn.Sequential(
+                mc_dropout.MCDropout(),
+                nn.Linear(512 * block.expansion, num_classes),
+            )
+
 
         if init_weights:
             self.apply(self.initialize_weights)
@@ -188,6 +199,7 @@ def resnet34(pretrained=False, progress=True, **kwargs):
 def resnet50(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-50 model."""
     return _resnet('50', Bottleneck, pretrained, progress, **kwargs)
+
 
 def resnet101(pretrained=False, progress=True, **kwargs):
     """Constructs a ResNet-101 model."""
