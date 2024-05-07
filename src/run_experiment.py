@@ -22,6 +22,7 @@ import itertools
 import os
 
 
+
 def create_experiment_config_argparser(parser):
     parser.add_argument("--batch_size", type=int, default=64, help="input batch size for training")
     parser.add_argument("--scoring_batch_size", type=int, default=256, help="input batch size for scoring")
@@ -179,7 +180,7 @@ def main():
 
     print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 1, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": 20, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
     samples_per_class = args.initial_samples_per_class
@@ -187,7 +188,7 @@ def main():
     balanced_test_set = args.balanced_test_set
     balanced_validation_set = args.balanced_validation_set
 
-    experiment_data = get_experiment_data(
+    experiment_data, store = get_experiment_data(
         data_source=dataset.get_data_source(),
         num_classes=dataset.num_classes,
         initial_samples=args.initial_samples,
@@ -196,6 +197,7 @@ def main():
         validation_set_size=validation_set_size,
         balanced_test_set=balanced_test_set,
         balanced_validation_set=balanced_validation_set,
+        store=store,
     )
 
     test_loader = torch.utils.data.DataLoader(

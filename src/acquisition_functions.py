@@ -5,6 +5,7 @@ import torch_utils
 
 import enum
 
+#TODO: add least confidence acquistion function
 
 def random_acquisition_function(logits_b_K_C):
     # If we use this together with a heuristic, make it small, so the heuristic takes over after the

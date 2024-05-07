@@ -45,8 +45,12 @@ class PRC_AUC(Metric):
         # ROY: Assuming y has shape (n_samples,) and y_pred has shape (n_samples, n_classes) with probabilities
         # we binarize the labels to make sure the sklearn package runs successfully
         y_binary = label_binarize(y.cpu().numpy(), classes=np.arange(self.num_classes))
-        # get micro precision recall scores
-        precision, recall, _ = precision_recall_curve(y_binary.ravel(), y_pred.cpu().numpy().ravel())
+        if self.num_classes == 2:
+            # only use the logits (or softmax probabilities .softmax(1)) of the positive class hence [:, 1]
+            precision, recall, _ = precision_recall_curve(y_binary.ravel(), y_pred.cpu().numpy()[:, 1])
+        else:
+            # get micro precision recall scores
+            precision, recall, _ = precision_recall_curve(y_binary.ravel(), y_pred.cpu().numpy().ravel())
         self._precision.append(precision)
         self._recall.append(recall)
 

@@ -50,21 +50,33 @@ class DataSource:
 
 
 def get_RSNA(target_col, root="./", seed=9031, train_pct=60, val_pct=20, test_pct=20):
-    # TODO: Might need to use subrange_dataset.py for validation
     assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
 
     rsna_directory = root + "data/RSNA"
-    # TODO: Fix these numbers
-    rsna_mean = [0.47889522, 0.47227842, 0.43047404]
-    rsna_std = [0.24205776, 0.23828046, 0.25874835]
+    rsna_mean = [0.5031, 0.5031, 0.5031]
+    rsna_std = [0.2326, 0.2326, 0.2326]
 
-    # Define transformations for the images
+    # # TODO: Check why this data is so much slower than the other datasets
+    # # Define transformations for the images
     rsna_transform = transforms.Compose([
         transforms.ToPILImage(),  # Convert numpy array to PIL Image
         transforms.Resize((256, 256)),  # Resize images to 256x256
+        transforms.Grayscale(3),
         transforms.ToTensor(),  # Convert images to Tensor
         transforms.Normalize(mean=rsna_mean, std=rsna_std)  # Normalization
     ])
+
+    # train_transform = transforms.Compose([
+    #     transforms.RandomOrder([
+    #         transforms.RandomApply([transforms.RandomAffine(degrees=0, translate=(0.2, 0.2))], 1),
+    #         transforms.RandomApply([transforms.RandomAffine(degrees=(-10, 10))], 1),
+    #         transforms.RandomApply([transforms.RandomAffine(degrees=0, scale=(.98, 1.02))], 1),
+    #         transforms.RandomApply([transforms.RandomAffine(degrees=0, shear=(-5, 5))], 1),
+    #         transforms.RandomApply([transforms.RandomCrop(32, padding=4)], 1),
+    #         transforms.RandomApply([transforms.RandomHorizontalFlip()], 1),
+    #         ])
+    #     ])
+
 
     train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4),
                                           transforms.RandomHorizontalFlip()])
@@ -73,7 +85,7 @@ def get_RSNA(target_col, root="./", seed=9031, train_pct=60, val_pct=20, test_pc
     # Load all labels
     full_dataset = RSNAPneumoniaDataset(
         csv_file=rsna_directory + '/panel_data_rsna.csv',
-        root_dir=rsna_directory + '/stage_2_train_images',
+        root_dir=rsna_directory + '/imgs',
         target_col=target_col,
         transform=rsna_transform,
     )
@@ -84,7 +96,7 @@ def get_RSNA(target_col, root="./", seed=9031, train_pct=60, val_pct=20, test_pc
 
     # Split dataset into train+val and test
     train_val_indices, test_indices = train_test_split(
-        range(len(full_dataset)), test_size=test_size, random_state=seed, stratify=full_dataset.labels
+        range(len(full_dataset)), test_size=test_size, random_state=seed, stratify=full_dataset.targets
     )
 
     # Split train+val into train and val if validation is needed
@@ -250,9 +262,9 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.cinic10:
             return get_CINIC10()
         elif self == DatasetEnum.rsna_binary:
-            return get_RSNA('Target', root="./", seed=9031, train_pct=80, val_pct=5, test_pct=15)
+            return get_RSNA('Target', root="./", seed=9031, train_pct=70, val_pct=10, test_pct=20)
         elif self == DatasetEnum.rsna_multi:
-            return get_RSNA('class', root="./", seed=9031, train_pct=80, val_pct=5, test_pct=15)
+            return get_RSNA('class', root="./", seed=9031, train_pct=70, val_pct=10, test_pct=20)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -357,6 +369,7 @@ def get_experiment_data(
         validation_set_size,
         balanced_test_set,
         balanced_validation_set,
+        store,
 ):
     train_dataset, test_dataset, validation_dataset = (
         data_source.train_dataset,
@@ -401,12 +414,14 @@ def get_experiment_data(
                 validation_dataset = data.Subset(
                     validation_dataset, torch.randperm(len(validation_dataset))[:validation_set_size].tolist()
                 )
+                store['Using a balanced validation set:'] = False
             else:
                 print("Using a balanced validation set")
                 validation_dataset = data.Subset(
                     validation_dataset,
                     balance_dataset_by_repeating(validation_dataset, num_classes, validation_set_size, upsample=False),
                 )
+                store['Using a balanced validation set:'] = True
 
     if balanced_test_set:
         print("Using a balanced test set")
@@ -418,6 +433,9 @@ def get_experiment_data(
             test_dataset, balance_dataset_by_repeating(test_dataset, num_classes, len(test_dataset))
         )
 
+        store['USING BALANCED DATASET'] = True
+        store['Distribution of original test set classes:'] = classes
+
     if reduced_dataset:
         # Let's assume we won't use more than 1000 elements for our validation set.
         active_learning_data.extract_dataset(len(train_dataset) - max(len(train_dataset) // 20, 5000))
@@ -426,34 +444,46 @@ def get_experiment_data(
             validation_dataset = subrange_dataset.SubrangeDataset(validation_dataset, 0,
                                                                   len(validation_dataset) // 10)
         print("USING REDUCED DATASET!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        store['USING REDUCED DATASET'] = True
 
     show_class_frequencies = True
     if show_class_frequencies:
         print("Distribution of training set classes:")
         classes = get_target_bins(train_dataset)
         print(classes)
+        store['Distribution of training set classes:'] = classes
 
         print("Distribution of validation set classes:")
         classes = get_target_bins(validation_dataset)
         print(classes)
+        store['Distribution of validation set classes:'] = classes
 
         print("Distribution of test set classes:")
         classes = get_target_bins(test_dataset)
         print(classes)
+        store['Distribution of test set classes:'] = classes
 
         print("Distribution of pool classes:")
         classes = get_target_bins(active_learning_data.available_dataset)
         print(classes)
+        store['Distribution of pool classes:'] = classes
 
         print("Distribution of active set classes:")
         classes = get_target_bins(active_learning_data.active_dataset)
         print(classes)
+        store['Distribution of active set classes:'] = classes
 
     print(f"Dataset info:")
     print(f"\t{len(active_learning_data.active_dataset)} active samples")
     print(f"\t{len(active_learning_data.available_dataset)} available samples")
     print(f"\t{len(validation_dataset)} validation samples")
     print(f"\t{len(test_dataset)} test samples")
+
+    # store results in log file
+    store['active samples'] = len(active_learning_data.active_dataset)
+    store['available samples'] = len(active_learning_data.available_dataset)
+    store['validation samples'] = len(validation_dataset)
+    store['test samples'] = len(test_dataset)
 
     if data_source.shared_transform is not None or data_source.train_transform is not None:
         train_dataset = TransformedDataset(
@@ -482,7 +512,7 @@ def get_experiment_data(
         validation_dataset=validation_dataset,
         test_dataset=test_dataset,
         initial_samples=initial_samples,
-    )
+    ), store
 
 
 def compose_transformers(iterable):
@@ -550,5 +580,7 @@ def get_targets(dataset):
         return torch.as_tensor(dataset.targets)
     if isinstance(dataset, datasets.SVHN):
         return dataset.labels
+    if isinstance(dataset, RSNAPneumoniaDataset):
+        return torch.as_tensor(dataset.targets)
 
     raise NotImplementedError(f"Unknown dataset {dataset}!")

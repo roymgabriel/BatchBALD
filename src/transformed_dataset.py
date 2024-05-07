@@ -16,7 +16,13 @@ class TransformedDataset(data.Dataset):
         if transformer:
             self.transformer = transformer
         else:
-            self.transformer = lambda _, data_label: (vision_transformer(data_label[0]), data_label[1])
+            try:
+                # you are dealing with RSNA dataset
+                self.transformer = lambda _, data_label: (vision_transformer(data_label['image']), data_label['target'])
+            except:
+                self.transformer = lambda _, data_label: (vision_transformer(data_label[0]), data_label[1])
+            # finally:
+            #     raise ValueError("Something error happened in transforming dataset!")
 
     def __getitem__(self, idx):
         return self.transformer(idx, self.dataset[idx])

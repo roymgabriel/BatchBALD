@@ -2,6 +2,7 @@ import ignite
 from torch import optim as optim
 from torch.nn import functional as F
 from torch import nn
+import torch
 
 import ignite_restoring_score_guard
 from ignite_progress_bar import ignite_progress_bar
@@ -10,6 +11,9 @@ from sampler_model import SamplerModel, NoDropoutModel
 from typing import NamedTuple
 
 from metrics_utils import *
+
+from torch.profiler import profile, record_function, ProfilerActivity
+
 
 class TrainModelResult(NamedTuple):
     num_epochs: int
@@ -48,6 +52,14 @@ def train_model(
     test_sampler = SamplerModel(model, k=min(num_inference_samples, 100)).to(device)
     validation_sampler = NoDropoutModel(model).to(device)
     training_sampler = SamplerModel(model, k=1).to(device)
+
+    # # Start profiling
+    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    #              schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+    #              on_trace_ready=torch.profiler.tensorboard_trace_handler('./logs/profiler'),
+    #              record_shapes=True,
+    #              profile_memory=True,
+    #              with_stack=True) as prof:
 
     trainer = ignite.engine.create_supervised_trainer(training_sampler, optimizer, F.nll_loss, device=device)
     validation_evaluator = ignite.engine.create_supervised_evaluator(
