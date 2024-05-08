@@ -248,7 +248,7 @@ def main():
                 desc,
                 log_interval,
                 device,
-                num_classes=dataset.num_classes
+                num_classes=dataset.num_classes,
             )
 
         with ContextStopwatch() as batch_acquisition_stopwatch:
@@ -301,4 +301,5 @@ def main():
 
 
 if __name__ == "__main__":
+    #!/usr/bin/env python3
     main()

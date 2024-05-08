@@ -49,7 +49,7 @@ class DataSource:
     scoring_transform: object = None
 
 
-def get_RSNA(target_col, root="./", seed=9031, train_pct=60, val_pct=20, test_pct=20):
+def get_RSNA(target_col, root="./", seed=9031, train_pct=70, val_pct=10, test_pct=20):
     assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
 
     rsna_directory = root + "data/RSNA"
@@ -317,13 +317,22 @@ class DatasetEnum(enum.Enum):
 
     def create_optimizer(self, model):
         if self == DatasetEnum.cinic10 or self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
-            optimizer = optim.Adam(model.parameters(), lr=1e-4)
+            optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=0.1)
         else:
             optimizer = optim.Adam(model.parameters())
         return optimizer
 
     def create_train_model_extra_args(self, optimizer):
         return {}
+
+    def create_lr_scheduler(self, optimizer):
+        if self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
+            lr_scheduler = optim.lr_scheduler.CosineAnnealingLR
+            LR_SCHEDULER_PARAMETERS = {'T_max': 30, 'eta_min': 0, 'last_epoch': - 1, 'verbose': True}
+            lr_scheduler = lr_scheduler(optimizer, **LR_SCHEDULER_PARAMETERS)
+        else:
+            lr_scheduler = None
+        return lr_scheduler
 
     def train_model(
             self,
@@ -341,6 +350,7 @@ class DatasetEnum(enum.Enum):
     ):
         model = self.create_bayesian_model(device)
         optimizer = self.create_optimizer(model)
+        lr_scheduler = self.create_lr_scheduler(optimizer)
         num_epochs, test_metrics = train_model(
             model,
             optimizer,
@@ -355,6 +365,7 @@ class DatasetEnum(enum.Enum):
             device,
             num_classes=num_classes,
             epoch_results_store=epoch_results_store,
+            lr_scheduler=lr_scheduler,
             **self.create_train_model_extra_args(optimizer),
         )
         return model, num_epochs, test_metrics

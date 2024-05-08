@@ -99,7 +99,7 @@ def main():
 
     print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 1, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": 20, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
 
@@ -107,7 +107,7 @@ def main():
 
     reduced_train_length = args.train_dataset_limit
 
-    experiment_data = get_experiment_data(
+    experiment_data, store = get_experiment_data(
         data_source,
         dataset.num_classes,
         None,
@@ -116,6 +116,7 @@ def main():
         args.validation_set_size,
         args.balanced_test_set,
         args.balanced_validation_set,
+        store=store
     )
 
     if not reduced_train_length:

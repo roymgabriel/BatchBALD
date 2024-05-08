@@ -73,7 +73,7 @@ def store_epoch_results(engine: ignite.engine.Engine, store_object, name=None):
     @engine.on(ignite.engine.Events.EPOCH_COMPLETED)
     def log(_):
         metrics = engine.state.metrics
-        if isinstance(store_object, collections.MutableSequence):
+        if isinstance(store_object, collections.abc.MutableSequence):
             store_object.append(metrics)
         else:
             store_object[name] = metrics
