@@ -80,7 +80,7 @@ def recover_model(laaos_store, target_iteration=None):
 
     print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 1, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": 20, "pin_memory": True} if use_cuda else {}
 
     dataset: dataset_enum.DatasetEnum = args.dataset
     experiment_data = dataset_enum.get_experiment_data(

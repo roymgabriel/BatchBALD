@@ -66,20 +66,19 @@ def get_RSNA(target_col, root="./", seed=9031, train_pct=70, val_pct=10, test_pc
         transforms.Normalize(mean=rsna_mean, std=rsna_std)  # Normalization
     ])
 
-    # train_transform = transforms.Compose([
-    #     transforms.RandomOrder([
-    #         transforms.RandomApply([transforms.RandomAffine(degrees=0, translate=(0.2, 0.2))], 1),
-    #         transforms.RandomApply([transforms.RandomAffine(degrees=(-10, 10))], 1),
-    #         transforms.RandomApply([transforms.RandomAffine(degrees=0, scale=(.98, 1.02))], 1),
-    #         transforms.RandomApply([transforms.RandomAffine(degrees=0, shear=(-5, 5))], 1),
-    #         transforms.RandomApply([transforms.RandomCrop(32, padding=4)], 1),
-    #         transforms.RandomApply([transforms.RandomHorizontalFlip()], 1),
-    #         ])
-    #     ])
+    train_transform = transforms.Compose([
+        transforms.RandomOrder([
+            transforms.RandomApply([transforms.RandomAffine(degrees=0, translate=(0.2, 0.2))], 1),
+            transforms.RandomApply([transforms.RandomAffine(degrees=(-10, 10))], 1),
+            transforms.RandomApply([transforms.RandomAffine(degrees=0, scale=(.98, 1.02))], 1),
+            transforms.RandomApply([transforms.RandomAffine(degrees=0, shear=(-5, 5))], 1),
+            transforms.RandomApply([transforms.RandomHorizontalFlip()], 1),
+            ])
+        ])
 
 
-    train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4),
-                                          transforms.RandomHorizontalFlip()])
+    # train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4),
+    #                                       transforms.RandomHorizontalFlip()])
 
 
     # Load all labels
@@ -311,13 +310,16 @@ class DatasetEnum(enum.Enum):
             return resnet_model.resnet50(pretrained=False, num_classes=num_classes, bn=True).to(device)
             # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
         elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
-            return resnet_model.resnet50(pretrained=True, num_classes=num_classes, bn=True).to(device)
+            return resnet_model.resnet50(pretrained=False, num_classes=num_classes, bn=True).to(device)
+            # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
     def create_optimizer(self, model):
-        if self == DatasetEnum.cinic10 or self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
-            optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=0.1)
+        if self == DatasetEnum.cinic10:
+            optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
+            optimizer = optim.Adam(model.parameters(), lr=1e-4)
         else:
             optimizer = optim.Adam(model.parameters())
         return optimizer
@@ -328,7 +330,7 @@ class DatasetEnum(enum.Enum):
     def create_lr_scheduler(self, optimizer):
         if self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
             lr_scheduler = optim.lr_scheduler.CosineAnnealingLR
-            LR_SCHEDULER_PARAMETERS = {'T_max': 30, 'eta_min': 0, 'last_epoch': - 1, 'verbose': True}
+            LR_SCHEDULER_PARAMETERS = {'T_max': 10, 'eta_min': 0, 'last_epoch': - 1}
             lr_scheduler = lr_scheduler(optimizer, **LR_SCHEDULER_PARAMETERS)
         else:
             lr_scheduler = None
@@ -350,7 +352,7 @@ class DatasetEnum(enum.Enum):
     ):
         model = self.create_bayesian_model(device)
         optimizer = self.create_optimizer(model)
-        lr_scheduler = self.create_lr_scheduler(optimizer)
+        # lr_scheduler = self.create_lr_scheduler(optimizer)
         num_epochs, test_metrics = train_model(
             model,
             optimizer,
@@ -365,7 +367,7 @@ class DatasetEnum(enum.Enum):
             device,
             num_classes=num_classes,
             epoch_results_store=epoch_results_store,
-            lr_scheduler=lr_scheduler,
+            # lr_scheduler=lr_scheduler,
             **self.create_train_model_extra_args(optimizer),
         )
         return model, num_epochs, test_metrics

@@ -24,6 +24,10 @@ class RSNAPneumoniaDataset(Dataset):
         self.transform = transform
         self.targets = self.pneumonia_frame[target_col].values
 
+        if target_col.lower() == 'class':
+            encoder = LabelEncoder()
+            self.targets = encoder.fit_transform(self.targets)
+
     def __len__(self):
         return len(self.pneumonia_frame)
 
