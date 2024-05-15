@@ -36,6 +36,7 @@ culling_fields = [
 ]
 
 
+#NOTE: this can apply to all metrics
 @dataclass
 class AggregateAccuracies:
     sample_points: list
@@ -242,6 +243,39 @@ def gather_accuracy(store):
 
     return accuracy
 
+def gather_f1(store):
+    """Gathers all F1 values from the iterations in a store.
+
+    :returns an array of F1 values.
+    """
+    f1 = []
+    for iteration in store.iterations:
+        f1.append(iteration.test_metrics.f1)
+
+    return f1
+
+def gather_auprc(store):
+    """Gathers all AU PRC values from the iterations in a store.
+
+    :returns an array of AU PRC.
+    """
+    prc = []
+    for iteration in store.iterations:
+        prc.append(iteration.test_metrics.PRC_AUC)
+
+    return prc
+
+def gather_loss(store):
+    """Gathers all loss values from the iterations in a store.
+
+    :returns an array of loss.
+    """
+    nll = []
+    for iteration in store.iterations:
+        nll.append(iteration.test_metrics.nll)
+
+    return nll
+
 
 def fix_chosen_samples(chosen_samples):
     return chosen_samples if isinstance(chosen_samples, list) else [chosen_samples]
@@ -261,6 +295,21 @@ def gather_samples_I(store):
 def pandas_accuracies(stores: dict):
     """Creates a pandas DataFrame from the accuracies in a dict of stores."""
     return pd.DataFrame.from_dict(map_dict(stores, v=lambda store: pd.Series(gather_accuracy(store))), orient="index")
+
+def pandas_f1(stores: dict):
+    """Creates a pandas DataFrame from the f1 values in a dict of stores."""
+    return pd.DataFrame.from_dict(map_dict(stores, v=lambda store: pd.Series(gather_f1(store))), orient="index")
+
+
+def pandas_auprc(stores: dict):
+    """Creates a pandas DataFrame from the AU PRC in a dict of stores."""
+    return pd.DataFrame.from_dict(map_dict(stores, v=lambda store: pd.Series(gather_auprc(store))), orient="index")
+
+
+def pandas_loss(stores: dict):
+    """Creates a pandas DataFrame from the loss in a dict of stores."""
+    return pd.DataFrame.from_dict(map_dict(stores, v=lambda store: pd.Series(gather_loss(store))), orient="index")
+
 
 
 def index_of_first(iter, pred):
@@ -282,6 +331,15 @@ def get_marks(values_S, threshold):
 def get_accuracy(iteration):
     return iteration.test_metrics.accuracy
 
+def get_f1(iteration):
+    return iteration.test_metrics.f1
+
+def get_auprc(iteration):
+    return iteration.test_metrics.PRC_AUC
+
+def get_loss(iteration):
+    return iteration.test_metrics.nll
+
 
 def get_samples_accuracy_I(store):
     """Get all samples and accuracies for iterations (I) in a store.
@@ -294,6 +352,38 @@ def get_samples_accuracy_I(store):
     """
     return get_samples_values_I(store, gather_accuracy)
 
+def get_samples_f1_I(store):
+    """Get all samples and f1 values for iterations (I) in a store.
+
+    We never evaluate the final batch of chosen samples. F1 are always for the previous batch of
+    acquisition samples.
+
+    :returns a list of (samples, accuracy) tuples. F1 refers to the f1 value after having added samples to the
+    training set.
+    """
+    return get_samples_values_I(store, gather_f1)
+
+def get_samples_auprc_I(store):
+    """Get all samples and AU PRC for iterations (I) in a store.
+
+    We never evaluate the final batch of chosen samples. AU PRC are always for the previous batch of
+    acquisition samples.
+
+    :returns a list of (samples, accuracy) tuples. AU PRC refers to the AU PRC after having added samples to the
+    training set.
+    """
+    return get_samples_values_I(store, gather_auprc)
+
+def get_samples_loss_I(store):
+    """Get all samples and loss for iterations (I) in a store.
+
+    We never evaluate the final batch of chosen samples. Loss are always for the previous batch of
+    acquisition samples.
+
+    :returns a list of (samples, accuracy) tuples. Loss refers to the loss after having added samples to the
+    training set.
+    """
+    return get_samples_values_I(store, gather_loss)
 
 def get_samples_values_I(store, values_getter):
     """
@@ -393,6 +483,15 @@ def aggregate_values_sample_points_T(values_sample_points_T, percentiles=None, t
 
 def aggregate_accuracies(stores, percentiles=None, thresholds=None):
     return aggregate_values(stores, gather_accuracy, percentiles, thresholds)
+
+def aggregate_f1(stores, percentiles=None, thresholds=None):
+    return aggregate_values(stores, gather_f1, percentiles, thresholds)
+
+def aggregate_auprc(stores, percentiles=None, thresholds=None):
+    return aggregate_values(stores, gather_auprc, percentiles, thresholds)
+
+def aggregate_loss(stores, percentiles=None, thresholds=None):
+    return aggregate_values(stores, gather_loss, percentiles, thresholds)
 
 
 def aggregate_values(stores, values_getter, percentiles=None, thresholds=None):

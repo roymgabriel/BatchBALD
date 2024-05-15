@@ -4,31 +4,28 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import LabelEncoder
 from torchvision.io import read_image
 
-class RSNAPneumoniaDataset(Dataset):
+class EmoryCOVIDDataset(Dataset):
     def __init__(self, csv_file, root_dir, target_col, transform=None):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the DICOM images.
-            target_col (string): Target column name (must be one of `Target` or `class`).
+            root_dir (string): Directory with all the COVID images.
+            target_col (string): Target column name (must be one of `binary_target` or `Median`).
             transform (callable, optional): Optional transform to be applied on a sample.
         """
 
-        self.pneumonia_frame = pd.read_csv(csv_file)
+        self.covid_frame = pd.read_csv(csv_file)
         self.root_dir = root_dir
         self.transform = transform
-        self.targets = self.pneumonia_frame[target_col].values
-
-        if target_col.lower() == 'class':
-            encoder = LabelEncoder()
-            self.targets = encoder.fit_transform(self.targets)
+        self.targets = self.covid_frame[target_col].values
 
     def __len__(self):
-        return len(self.pneumonia_frame)
+        return len(self.covid_frame)
 
     def __getitem__(self, idx):
-        image_path = os.path.join(self.root_dir, self.pneumonia_frame.iloc[idx, 1] + '.png')
-        image = read_image(image_path)  # Loads PNG image as a tensor
+        # First column is File Name which has the image file name
+        image_path = os.path.join(self.root_dir, self.covid_frame.iloc[idx, 0])
+        image = read_image(image_path)  # Loads JPG image as a tensor
 
         target = self.targets[idx]
         if self.transform:

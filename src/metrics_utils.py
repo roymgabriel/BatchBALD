@@ -1,8 +1,45 @@
 from ignite.metrics import Accuracy, Loss, Precision, Recall, Metric
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
-import numpy as np
 from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
+
+import torch.nn as nn
+import numpy as np
+
+class WeightedNLLLoss(nn.Module):
+    def __init__(self, weight=None, test_dtype=None):
+        super(WeightedNLLLoss, self).__init__()
+        if test_dtype:
+            # for testing eval we use type double
+            self.weight = weight.cuda().double()
+        else:
+            self.weight = weight.cuda()
+        self.nll_loss = nn.NLLLoss(weight=self.weight)
+
+    def forward(self, y_pred, y):
+        return self.nll_loss(y_pred, y)
+
+# class WeightedNLLLoss(Metric):
+#     def __init__(self, weight=None, output_transform=lambda x: x):
+#         self.weight = weight
+#         self.loss_fn = nn.NLLLoss(weight=self.weight)
+#         super(WeightedNLLLoss, self).__init__(output_transform=output_transform)
+
+#     @reinit__is_reduced
+#     def reset(self):
+#         self._sum_loss = 0.0
+#         self._num_examples = 0
+
+#     @reinit__is_reduced
+#     def update(self, output):
+#         y_pred, y = output
+#         loss = self.loss_fn(y_pred, y)
+#         self._sum_loss += loss.item() * y.shape[0]
+#         self._num_examples += y.shape[0]
+
+#     @sync_all_reduce('_sum_loss', '_num_examples')
+#     def compute(self):
+#         return self._sum_loss / self._num_examples if self._num_examples > 0 else 0
 
 
 class F1Score(Metric):

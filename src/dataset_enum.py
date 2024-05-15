@@ -24,9 +24,11 @@ import subrange_dataset
 #TODO: Need to add RSNA dataset
 from rsna_dataset import RSNAPneumoniaDataset
 from sklearn.model_selection import train_test_split
-import numpy as np
 
 # TODO: Need to add NIH Chest XRay Dataset
+
+# TODO: Need to add EMORY COVID Dataset
+from emorycovid_dataset import EmoryCOVIDDataset
 
 
 @dataclass
@@ -49,7 +51,7 @@ class DataSource:
     scoring_transform: object = None
 
 
-def get_RSNA(target_col, root="./", seed=9031, train_pct=70, val_pct=10, test_pct=20):
+def get_RSNA(target_col, root="./", train_pct=70, val_pct=10, test_pct=20):
     assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
 
     rsna_directory = root + "data/RSNA"
@@ -95,13 +97,13 @@ def get_RSNA(target_col, root="./", seed=9031, train_pct=70, val_pct=10, test_pc
 
     # Split dataset into train+val and test
     train_val_indices, test_indices = train_test_split(
-        range(len(full_dataset)), test_size=test_size, random_state=seed, stratify=full_dataset.targets
+        range(len(full_dataset)), test_size=test_size,  stratify=full_dataset.targets
     )
 
     # Split train+val into train and val if validation is needed
     if val_size > 0:
         train_indices, val_indices = train_test_split(
-            train_val_indices, test_size=val_size, random_state=seed
+            train_val_indices, test_size=val_size,
         )
         val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
     else:
@@ -120,6 +122,87 @@ def get_RSNA(target_col, root="./", seed=9031, train_pct=70, val_pct=10, test_pc
 
     # # Use the custom dataset splitting function
     # train_dataset, val_dataset, test_dataset = subrange_dataset.dataset_subset_split(full_dataset, [train_end, val_end])
+
+    return DataSource(
+        train_dataset=train_dataset,
+        validation_dataset=val_dataset,
+        test_dataset=test_dataset,
+        train_transform=train_transform,
+        shared_transform=rsna_transform,
+    )
+
+
+def get_EMORY_COVID(target_col, root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit'):
+    assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
+
+    covid_directory = root + "data/EMORY_COVID"
+    covid_mean = [0.4841, 0.4841, 0.4841]
+    covid_std = [0.2256, 0.2256, 0.2256]
+
+    # Define transformations for the images
+    rsna_transform = transforms.Compose([
+        transforms.ToPILImage(),  # Convert numpy array to PIL Image
+        transforms.Resize((256, 256)),  # Resize images to 256x256
+        transforms.Grayscale(3),
+        transforms.ToTensor(),  # Convert images to Tensor
+        transforms.Normalize(mean=covid_mean, std=covid_std)  # Normalization
+    ])
+
+    train_transform = transforms.Compose([
+        transforms.RandomOrder([
+            transforms.RandomApply([transforms.RandomAffine(degrees=0, translate=(0.2, 0.2))], 1),
+            transforms.RandomApply([transforms.RandomAffine(degrees=(-10, 10))], 1),
+            transforms.RandomApply([transforms.RandomAffine(degrees=0, scale=(.98, 1.02))], 1),
+            transforms.RandomApply([transforms.RandomAffine(degrees=0, shear=(-5, 5))], 1),
+            transforms.RandomApply([transforms.RandomHorizontalFlip()], 1),
+            ])
+        ])
+
+
+    # train_transform = transforms.Compose([transforms.RandomCrop(32, padding=4),
+    #                                       transforms.RandomHorizontalFlip()])
+
+
+    # Load all labels
+    if data_type == 'mild_omit':
+        full_dataset = EmoryCOVIDDataset(
+            csv_file=covid_directory + '/mild_dataset.csv',
+            root_dir=covid_directory + '/imgs',
+            target_col=target_col,
+            transform=rsna_transform,
+        )
+    elif data_type == 'mild_merged':
+        full_dataset = EmoryCOVIDDataset(
+            csv_file=covid_directory + '/mild_merged_dataset.csv',
+            root_dir=covid_directory + '/imgs',
+            target_col=target_col,
+            transform=rsna_transform,
+        )
+    else:
+        raise ValueError(f'data_type {data_type} parameter is not valid! Must be one of `mild_omit` or `mild_merged`!')
+
+    # Calculate split sizes
+    test_size = test_pct / 100
+    val_size = val_pct / (100 - test_pct) if test_pct < 100 else 0
+
+    # Split dataset into train+val and test
+    train_val_indices, test_indices = train_test_split(
+        range(len(full_dataset)), test_size=test_size, stratify=full_dataset.targets
+    )
+
+    # Split train+val into train and val if validation is needed
+    if val_size > 0:
+        train_indices, val_indices = train_test_split(
+            train_val_indices, test_size=val_size,
+        )
+        val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
+    else:
+        train_indices = train_val_indices
+        val_dataset = None
+
+    # Create dataset views for training, validation (if exists), and testing
+    train_dataset = torch.utils.data.Subset(full_dataset, train_indices)
+    test_dataset = torch.utils.data.Subset(full_dataset, test_indices)
 
     return DataSource(
         train_dataset=train_dataset,
@@ -193,6 +276,8 @@ class DatasetEnum(enum.Enum):
     cinic10 = "cinic10"
     rsna_binary = "rsna_binary"
     rsna_multi = "rsna_multi"
+    covid_binary = 'covid_binary'
+    covid_multi = 'covid_multi'
 
     def get_data_source(self):
         if self == DatasetEnum.mnist:
@@ -261,9 +346,13 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.cinic10:
             return get_CINIC10()
         elif self == DatasetEnum.rsna_binary:
-            return get_RSNA('Target', root="./", seed=9031, train_pct=70, val_pct=10, test_pct=20)
+            return get_RSNA('Target', root="./", train_pct=70, val_pct=10, test_pct=20)
         elif self == DatasetEnum.rsna_multi:
-            return get_RSNA('class', root="./", seed=9031, train_pct=70, val_pct=10, test_pct=20)
+            return get_RSNA('class', root="./", train_pct=70, val_pct=10, test_pct=20)
+        elif self == DatasetEnum.covid_binary:
+            return get_EMORY_COVID('binary_target', root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit')
+        elif self == DatasetEnum.covid_multi:
+            return get_EMORY_COVID('Median', root="./",train_pct=70, val_pct=10, test_pct=20, data_type='mild_merged')
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -281,10 +370,12 @@ class DatasetEnum(enum.Enum):
             return 47
         elif self == DatasetEnum.cinic10:
             return 10
-        elif self == DatasetEnum.rsna_binary:
+        elif self == DatasetEnum.rsna_binary or self == DatasetEnum.covid_binary:
             return 2
         elif self == DatasetEnum.rsna_multi:
             return 3
+        elif self == DatasetEnum.covid_multi:
+            return 4
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -311,7 +402,8 @@ class DatasetEnum(enum.Enum):
             # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
         elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
             return resnet_model.resnet50(pretrained=False, num_classes=num_classes, bn=True).to(device)
-            # return vgg_model.vgg16_cinic10_bn(pretrained=True, num_classes=num_classes).to(device)
+        elif self == DatasetEnum.covid_binary or self == DatasetEnum.covid_multi:
+            return resnet_model.resnet50(pretrained=False, num_classes=num_classes, bn=True).to(device)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -320,6 +412,8 @@ class DatasetEnum(enum.Enum):
             optimizer = optim.Adam(model.parameters(), lr=1e-4)
         elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
             optimizer = optim.Adam(model.parameters(), lr=1e-4)
+        elif self == DatasetEnum.covid_binary or self == DatasetEnum.covid_multi:
+            optimizer = optim.Adam(model.parameters(), lr=1e-3)
         else:
             optimizer = optim.Adam(model.parameters())
         return optimizer
@@ -328,9 +422,11 @@ class DatasetEnum(enum.Enum):
         return {}
 
     def create_lr_scheduler(self, optimizer):
-        if self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
+        # NOTE: Set T_max to a large value so that LR does not reset in between acquisitions
+        if self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi \
+            or self == DatasetEnum.covid_binary or self == DatasetEnum.covid_multi:
             lr_scheduler = optim.lr_scheduler.CosineAnnealingLR
-            LR_SCHEDULER_PARAMETERS = {'T_max': 10, 'eta_min': 0, 'last_epoch': - 1}
+            LR_SCHEDULER_PARAMETERS = {'T_max': 30, 'eta_min': 0, 'last_epoch': - 1}
             lr_scheduler = lr_scheduler(optimizer, **LR_SCHEDULER_PARAMETERS)
         else:
             lr_scheduler = None
@@ -368,6 +464,7 @@ class DatasetEnum(enum.Enum):
             num_classes=num_classes,
             epoch_results_store=epoch_results_store,
             # lr_scheduler=lr_scheduler,
+            num_lr_epochs=1,
             **self.create_train_model_extra_args(optimizer),
         )
         return model, num_epochs, test_metrics
@@ -594,6 +691,8 @@ def get_targets(dataset):
     if isinstance(dataset, datasets.SVHN):
         return dataset.labels
     if isinstance(dataset, RSNAPneumoniaDataset):
+        return torch.as_tensor(dataset.targets)
+    if isinstance(dataset, EmoryCOVIDDataset):
         return torch.as_tensor(dataset.targets)
 
     raise NotImplementedError(f"Unknown dataset {dataset}!")

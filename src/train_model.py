@@ -14,21 +14,27 @@ from metrics_utils import *
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
+# NOTE: COVID WEIGHTS
+class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
+class_weights = class_weights / class_weights.sum()  # Normalize weights
+
 
 class TrainModelResult(NamedTuple):
     num_epochs: int
     test_metrics: dict
 
 
-def build_metrics(num_classes):
+def build_metrics(num_classes, test_dtype=None):
+
     return {
         "accuracy": Accuracy(),
-        "nll": Loss(F.nll_loss),
+        # "nll": Loss(F.nll_loss),
+        "nll": Loss(WeightedNLLLoss(weight=class_weights, test_dtype=test_dtype)),
         "f1": F1Score(),
         "precision": Precision(average=True),
         "recall": Recall(average=True),
-        "ROC AUC": ROC_AUC(num_classes=num_classes),
-        "PRC AUC": PRC_AUC(num_classes=num_classes),
+        "ROC_AUC": ROC_AUC(num_classes=num_classes),
+        "PRC_AUC": PRC_AUC(num_classes=num_classes),
     }
 
 
@@ -61,12 +67,16 @@ def train_model(
     #              profile_memory=True,
     #              with_stack=True) as prof:
 
-    trainer = ignite.engine.create_supervised_trainer(training_sampler, optimizer, F.nll_loss, device=device)
+    trainer = ignite.engine.create_supervised_trainer(training_sampler, optimizer, WeightedNLLLoss(weight=class_weights), device=device)
     validation_evaluator = ignite.engine.create_supervised_evaluator(
         validation_sampler, metrics=build_metrics(num_classes=num_classes), device=device
     )
 
     def out_of_patience():
+        # NOTE: the learning rate scheduler will change during epoch training and reset to original value after new
+        # acquisition batch is added. We need to adjust this somehow that it either continues to decrease till end of acquisition
+        # or it resets but to a smaller value than initial LR value. So if we started at 1e-3 and then scheduled. Then we acquired
+        # a new batch of data, the new LR should start at < 1e-3.
         nonlocal num_lr_epochs
         if num_lr_epochs <= 0 or lr_scheduler is None:
             trainer.terminate()
@@ -74,10 +84,12 @@ def train_model(
             lr_scheduler.step()
             restoring_score_guard.patience = int(restoring_score_guard.patience * 1.5 + 0.5)
             print(f"New LRs: {[group['lr'] for group in optimizer.param_groups]}")
+            print(f"num_lr_epochs: {num_lr_epochs}")
             num_lr_epochs -= 1
 
     if lr_scheduler is not None:
         print(f"LRs: {[group['lr'] for group in optimizer.param_groups]}")
+        print(f"num_lr_epochs: {num_lr_epochs}")
 
     restoring_score_guard = ignite_restoring_score_guard.RestoringScoreGuard(
         patience=early_stopping_patience,
@@ -90,7 +102,9 @@ def train_model(
     )
 
     if test_loader is not None:
-        test_evaluator = ignite.engine.create_supervised_evaluator(test_sampler, metrics=build_metrics(num_classes=num_classes), device=device)
+        test_evaluator = ignite.engine.create_supervised_evaluator(test_sampler,
+                                                                   metrics=build_metrics(num_classes=num_classes, test_dtype='test'),
+                                                                   device=device)
         ignite_progress_bar(test_evaluator, desc("Test Eval"), log_interval)
         chain(trainer, test_evaluator, test_loader)
         log_epoch_results(test_evaluator, "Test", trainer)

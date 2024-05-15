@@ -141,7 +141,7 @@ def main():
 
     if args.experiments_laaos is not None:
         config = laaos.safe_load(
-            args.experiments_laaos, expose_symbols=(AcquisitionFunction, AcquisitionMethod, DatasetEnum)
+            args.experiments_laaos, exposed_symbols=(AcquisitionFunction, AcquisitionMethod, DatasetEnum)
         )
         # Merge the experiment config with args.
         # Args take priority.
@@ -180,7 +180,7 @@ def main():
 
     print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 20, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": 19, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
     samples_per_class = args.initial_samples_per_class
