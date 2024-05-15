@@ -33,7 +33,7 @@ def main():
     parser.add_argument("--test_batch_size", type=int, default=256, help="input batch size for testing")
     parser.add_argument("--validation_set_size", type=int, default=128, help="validation set size")
     parser.add_argument(
-        "--early_stopping_patience", type=int, default=1, help="# patience epochs for early stopping per iteration"
+        "--early_stopping_patience", type=int, default=5, help="# patience epochs for early stopping per iteration"
     )
     parser.add_argument("--epochs", type=int, default=30, help="number of epochs to train")
     parser.add_argument("--epoch_samples", type=int, default=5056, help="number of epochs to train")
@@ -99,7 +99,7 @@ def main():
 
     print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 20, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": 19, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
 

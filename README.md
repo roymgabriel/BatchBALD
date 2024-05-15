@@ -1,17 +1,25 @@
+# Roy Active Learning Project
+
+This is a contribution of the already implemented BatchBALD paper [BatchBALD: Efficient and Diverse Batch Acquisition for Deep Bayesian Active Learning](https://arxiv.org/abs/1906.08158). Our objective is to experiment with acquisition functions on medical imaging data.
+
+Original Read Me can be seen below.
+
+
+
 # BatchBALD
 
 **Note:** A more modular re-implementation can be found at https://github.com/BlackHC/batchbald_redux.
 
 ---
 
-This is the code drop for our paper 
+This is the code drop for our paper
 [BatchBALD: Efficient and Diverse Batch Acquisition for Deep Bayesian Active Learning](https://arxiv.org/abs/1906.08158).
 
 The code comes as is.
 
 See https://github.com/BlackHC/batchbald_redux and https://blackhc.github.io/batchbald_redux/ for a reimplementation.
 
-ElementAI's Baal framework also supports BatchBALD: https://github.com/ElementAI/baal/. 
+ElementAI's Baal framework also supports BatchBALD: https://github.com/ElementAI/baal/.
 
 Please cite us:
 
