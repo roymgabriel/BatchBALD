@@ -189,7 +189,7 @@ def main():
     balanced_validation_set = args.balanced_validation_set
 
     experiment_data, store = get_experiment_data(
-        data_source=dataset.get_data_source(),
+        data_source=dataset.get_data_source(seed=args.seed),
         num_classes=dataset.num_classes,
         initial_samples=args.initial_samples,
         reduced_dataset=reduced_dataset,

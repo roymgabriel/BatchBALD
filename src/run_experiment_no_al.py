@@ -103,7 +103,7 @@ def main():
 
     dataset: DatasetEnum = args.dataset
 
-    data_source = dataset.get_data_source()
+    data_source = dataset.get_data_source(seed=args.seed)
 
     reduced_train_length = args.train_dataset_limit
 

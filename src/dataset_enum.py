@@ -51,7 +51,7 @@ class DataSource:
     scoring_transform: object = None
 
 
-def get_RSNA(target_col, root="./", train_pct=70, val_pct=10, test_pct=20):
+def get_RSNA(target_col, root="./", train_pct=70, val_pct=10, test_pct=20, seed=9031):
     assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
 
     rsna_directory = root + "data/RSNA"
@@ -97,13 +97,13 @@ def get_RSNA(target_col, root="./", train_pct=70, val_pct=10, test_pct=20):
 
     # Split dataset into train+val and test
     train_val_indices, test_indices = train_test_split(
-        range(len(full_dataset)), test_size=test_size,  stratify=full_dataset.targets
+        range(len(full_dataset)), test_size=test_size, random_state=seed, stratify=full_dataset.targets
     )
 
     # Split train+val into train and val if validation is needed
     if val_size > 0:
         train_indices, val_indices = train_test_split(
-            train_val_indices, test_size=val_size,
+            train_val_indices, test_size=val_size, random_state=seed,
         )
         val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
     else:
@@ -132,7 +132,7 @@ def get_RSNA(target_col, root="./", train_pct=70, val_pct=10, test_pct=20):
     )
 
 
-def get_EMORY_COVID(target_col, root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit'):
+def get_EMORY_COVID(target_col, root="./", train_pct=70, val_pct=10, test_pct=20, seed=9031, data_type='mild_omit'):
     assert train_pct + val_pct + test_pct == 100, "The sum of the percentages must be 100."
 
     covid_directory = root + "data/EMORY_COVID"
@@ -187,13 +187,13 @@ def get_EMORY_COVID(target_col, root="./", train_pct=70, val_pct=10, test_pct=20
 
     # Split dataset into train+val and test
     train_val_indices, test_indices = train_test_split(
-        range(len(full_dataset)), test_size=test_size, stratify=full_dataset.targets
+        range(len(full_dataset)), test_size=test_size, stratify=full_dataset.targets, random_state=seed
     )
 
     # Split train+val into train and val if validation is needed
     if val_size > 0:
         train_indices, val_indices = train_test_split(
-            train_val_indices, test_size=val_size,
+            train_val_indices, test_size=val_size, random_state=seed
         )
         val_dataset = torch.utils.data.Subset(full_dataset, val_indices)
     else:
@@ -279,7 +279,7 @@ class DatasetEnum(enum.Enum):
     covid_binary = 'covid_binary'
     covid_multi = 'covid_multi'
 
-    def get_data_source(self):
+    def get_data_source(self, seed):
         if self == DatasetEnum.mnist:
             return get_MNIST()
         elif self in (
@@ -346,13 +346,13 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.cinic10:
             return get_CINIC10()
         elif self == DatasetEnum.rsna_binary:
-            return get_RSNA('Target', root="./", train_pct=70, val_pct=10, test_pct=20)
+            return get_RSNA('Target', root="./", train_pct=70, val_pct=10, test_pct=20, seed=seed)
         elif self == DatasetEnum.rsna_multi:
-            return get_RSNA('class', root="./", train_pct=70, val_pct=10, test_pct=20)
+            return get_RSNA('class', root="./", train_pct=70, val_pct=10, test_pct=20, seed=seed)
         elif self == DatasetEnum.covid_binary:
-            return get_EMORY_COVID('binary_target', root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit')
+            return get_EMORY_COVID('binary_target', root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit', seed=seed)
         elif self == DatasetEnum.covid_multi:
-            return get_EMORY_COVID('Median', root="./",train_pct=70, val_pct=10, test_pct=20, data_type='mild_merged')
+            return get_EMORY_COVID('Median', root="./",train_pct=70, val_pct=10, test_pct=20, data_type='mild_merged', seed=seed)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
