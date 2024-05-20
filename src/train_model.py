@@ -35,6 +35,7 @@ def build_metrics(num_classes, test_dtype=None):
         "recall": Recall(average=True),
         "ROC_AUC": ROC_AUC(num_classes=num_classes),
         "PRC_AUC": PRC_AUC(num_classes=num_classes),
+        "specificity": Specificity(num_classes=num_classes),
     }
 
 

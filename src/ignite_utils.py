@@ -27,6 +27,7 @@ def log_epoch_results(engine: ignite.engine.Engine, name, trainer: ignite.engine
         avg_recall = metrics["recall"]
         roc_auc = metrics["ROC_AUC"]
         prc_auc = metrics["PRC_AUC"]
+        specificity = metrics["specificity"]
         print(
             f"{name} Results - Epoch: {trainer.state.epoch if trainer.state else 0}  "
             f"Avg accuracy: {avg_accuracy*100:.2f}%, "
@@ -35,7 +36,8 @@ def log_epoch_results(engine: ignite.engine.Engine, name, trainer: ignite.engine
             f"Avg Precision: {avg_precision*100:.2f}%, "
             f"Avg Recall: {avg_recall*100:.2f}%, "
             f"ROC AUC: {roc_auc*100:.2f}%, "
-            f"PRC AUC: {prc_auc*100:.2f}%"
+            f"PRC AUC: {prc_auc*100:.2f}% ",
+            f"Specificity: {specificity*100:.2f}%"
         )
 
 def log_results(engine: ignite.engine.Engine, name):
@@ -49,6 +51,7 @@ def log_results(engine: ignite.engine.Engine, name):
         avg_recall = metrics["recall"]
         roc_auc = metrics["ROC_AUC"]
         prc_auc = metrics["PRC_AUC"]
+        specificity = metrics["specificity"]
         print(
             f"{name} Results - "
             f"Avg accuracy: {avg_accuracy*100:.2f}%, "
@@ -57,7 +60,8 @@ def log_results(engine: ignite.engine.Engine, name):
             f"Avg Precision: {avg_precision*100:.2f}%, "
             f"Avg Recall: {avg_recall*100:.2f}%, "
             f"ROC AUC: {roc_auc*100:.2f}%, "
-            f"PRC AUC: {prc_auc*100:.2f}%"
+            f"PRC AUC: {prc_auc*100:.2f}% ",
+            f"Specificity: {specificity*100:.2f}%"
         )
 
 

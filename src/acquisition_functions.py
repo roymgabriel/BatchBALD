@@ -5,8 +5,6 @@ import torch_utils
 
 import enum
 
-#TODO: add least confidence acquistion function
-
 def random_acquisition_function(logits_b_K_C):
     # If we use this together with a heuristic, make it small, so the heuristic takes over after the
     # first random pick.
@@ -32,18 +30,53 @@ def bald_acquisition_function(logits_b_K_C):
     return torch_utils.mutual_information(logits_b_K_C)
 
 
+# Function to perform Least Confidence Sampling
+def least_confidence__acquisition_function(logits_b_K_C):
+    """
+    Perform Least Confidence Sampling.
+    """
+    # Convert log probabilities to probabilities
+    # Calculate the confidence for each sample (max probability)
+    # torch.max yields a tuple with (max, argmax)
+    # negate to ensure you pick top k indices with least confidence not most confidence
+    return -torch.exp(
+        torch.max(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)[0])
+ 
+
+# Function to perform Margin Sampling
+def margin_sampling_acquisition_function(logits_b_K_C):
+    """
+    Perform Margin Sampling.
+    """
+    # Convert log probabilities to probabilities
+    probs =  torch.exp(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)
+    
+    # Sort the probabilities for each sample
+    sorted_probs, _ = torch.sort(probs, dim=-1, descending=True)
+    
+    # Calculate the margin (difference between top two probabilities)
+    margins = sorted_probs[:, 0] - sorted_probs[:, 1]
+    
+    # negate output to pick ones with smallest margins using topk in batch acquisition
+    return -margins
+
 class AcquisitionFunction(enum.Enum):
+    # TODO: Add Core-Set
+
     random = "random"
-    predictive_entropy = "predictive_entropy"
+    entropy_sampling = "entropy_sampling"
     bald = "bald"
     variation_ratios = "variation_ratios"
     mean_stddev = "mean_stddev"
+    margin_sampling = "margin_sampling"
+    least_confidence = "least_confidence"
+
 
     @property
     def scorer(self):
         if self == AcquisitionFunction.random:
             return random_acquisition_function
-        elif self == AcquisitionFunction.predictive_entropy:
+        elif self == AcquisitionFunction.entropy_sampling:
             return max_entropy_acquisition_function
         elif self == AcquisitionFunction.bald:
             return bald_acquisition_function
@@ -51,6 +84,10 @@ class AcquisitionFunction(enum.Enum):
             return variation_ratios
         elif self == AcquisitionFunction.mean_stddev:
             return mean_stddev_acquisition_function
+        elif self == AcquisitionFunction.margin_sampling:
+            return margin_sampling_acquisition_function
+        elif self == AcquisitionFunction.least_confidence:
+            return least_confidence__acquisition_function
         else:
             return NotImplementedError(f"{self} not supported yet!")
 
