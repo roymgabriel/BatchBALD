@@ -41,7 +41,7 @@ def least_confidence__acquisition_function(logits_b_K_C):
     # negate to ensure you pick top k indices with least confidence not most confidence
     return -torch.exp(
         torch.max(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)[0])
- 
+
 
 # Function to perform Margin Sampling
 def margin_sampling_acquisition_function(logits_b_K_C):
@@ -49,14 +49,14 @@ def margin_sampling_acquisition_function(logits_b_K_C):
     Perform Margin Sampling.
     """
     # Convert log probabilities to probabilities
-    probs =  torch.exp(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False), dim=1, keepdim=False)
-    
+    probs =  torch.exp(torch_utils.logit_mean(logits_b_K_C, dim=1, keepdim=False))
+
     # Sort the probabilities for each sample
     sorted_probs, _ = torch.sort(probs, dim=-1, descending=True)
-    
+
     # Calculate the margin (difference between top two probabilities)
     margins = sorted_probs[:, 0] - sorted_probs[:, 1]
-    
+
     # negate output to pick ones with smallest margins using topk in batch acquisition
     return -margins
 
