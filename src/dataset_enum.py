@@ -173,7 +173,8 @@ def get_EMORY_COVID(target_col, root="./", train_pct=70, val_pct=10, test_pct=20
         )
     elif data_type == 'mild_merged':
         full_dataset = EmoryCOVIDDataset(
-            csv_file=covid_directory + '/mild_merged_dataset.csv',
+            # mild_merged_dataset
+            csv_file=covid_directory + '/mild_dataset.csv',
             root_dir=covid_directory + '/imgs',
             target_col=target_col,
             transform=rsna_transform,
@@ -375,7 +376,8 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.rsna_multi:
             return 3
         elif self == DatasetEnum.covid_multi:
-            return 4
+            # 4
+            return 3
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 

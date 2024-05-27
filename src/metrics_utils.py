@@ -6,6 +6,7 @@ from ignite.metrics.metric import sync_all_reduce, reinit__is_reduced
 
 import torch.nn as nn
 import numpy as np
+import torch
 
 class WeightedNLLLoss(nn.Module):
     def __init__(self, weight=None, test_dtype=None):
@@ -123,6 +124,7 @@ class ROC_AUC(Metric):
 class Specificity(Metric):
     def __init__(self, num_classes: int, output_transform=lambda x: x):
         self.confusion_matrix = ConfusionMatrix(num_classes=num_classes)
+        self.num_classes = num_classes
         super(Specificity, self).__init__(output_transform)
 
     @reinit__is_reduced
@@ -135,8 +137,11 @@ class Specificity(Metric):
 
     @sync_all_reduce()
     def compute(self):
-        cm = self.confusion_matrix.compute()
-        tn = cm[0, 0].item()
-        fp = cm[0, 1].item()
-        specificity = tn / (tn + fp)
-        return specificity
+        cm = self.confusion_matrix.compute().cpu().numpy()
+        specificities = []
+        for i in range(self.num_classes):
+            tn = cm.sum() - (cm[i, :].sum() + cm[:, i].sum() - cm[i, i])
+            fp = cm[:, i].sum() - cm[i, i]
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            specificities.append(specificity)
+        return torch.tensor(specificities).mean().item()

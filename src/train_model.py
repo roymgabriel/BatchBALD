@@ -14,10 +14,6 @@ from metrics_utils import *
 
 from torch.profiler import profile, record_function, ProfilerActivity
 
-# NOTE: COVID WEIGHTS
-class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
-class_weights = class_weights / class_weights.sum()  # Normalize weights
-
 
 class TrainModelResult(NamedTuple):
     num_epochs: int
@@ -25,6 +21,18 @@ class TrainModelResult(NamedTuple):
 
 
 def build_metrics(num_classes, test_dtype=None):
+    # NOTE: COVID WEIGHTS ONLY
+    if num_classes == 2:
+        # for binary classes
+        class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
+    elif num_classes == 4:
+        # Uncomment this for multi (mild included)
+        class_weights = torch.tensor([1/0.34765625, 1/0.3031851 , 1/0.25120192, 1/0.09795673], dtype=torch.float)
+    elif num_classes == 3:
+        # Use this for multi (mild omitted)
+        class_weights = torch.tensor([1/0.498922, 1/0.360500 , 1/0.140578], dtype=torch.float)
+
+    class_weights = class_weights / class_weights.sum()  # Normalize weights
 
     return {
         "accuracy": Accuracy(),
@@ -59,6 +67,20 @@ def train_model(
     test_sampler = SamplerModel(model, k=min(num_inference_samples, 100)).to(device)
     validation_sampler = NoDropoutModel(model).to(device)
     training_sampler = SamplerModel(model, k=1).to(device)
+
+    # NOTE: COVID WEIGHTS ONLY
+    if num_classes == 2:
+        # for binary classes
+        class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
+    elif num_classes == 4:
+        # Uncomment this for multi (mild included)
+        class_weights = torch.tensor([1/0.34765625, 1/0.3031851 , 1/0.25120192, 1/0.09795673], dtype=torch.float)
+    elif num_classes == 3:
+        # Use this for multi (mild omitted)
+        class_weights = torch.tensor([1/0.498922, 1/0.360500 , 1/0.140578], dtype=torch.float)
+
+    class_weights = class_weights / class_weights.sum()  # Normalize weights
+
 
     # # Start profiling
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
