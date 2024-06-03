@@ -8,6 +8,8 @@ from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 import torch.utils.data as data
 import torch
+import torch.nn as nn
+
 
 from typing import List
 
@@ -21,13 +23,11 @@ from train_model import train_model
 from transformed_dataset import TransformedDataset
 import subrange_dataset
 
-#TODO: Need to add RSNA dataset
 from rsna_dataset import RSNAPneumoniaDataset
 from sklearn.model_selection import train_test_split
 
 # TODO: Need to add NIH Chest XRay Dataset
 
-# TODO: Need to add EMORY COVID Dataset
 from emorycovid_dataset import EmoryCOVIDDataset
 
 
@@ -349,7 +349,7 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.rsna_binary:
             return get_RSNA('Target', root="./", train_pct=70, val_pct=10, test_pct=20, seed=seed)
         elif self == DatasetEnum.rsna_multi:
-            return get_RSNA('class', root="./", train_pct=70, val_pct=10, test_pct=20, seed=seed)
+            return get_RSNA('multiTarget', root="./", train_pct=70, val_pct=10, test_pct=20, seed=seed)
         elif self == DatasetEnum.covid_binary:
             return get_EMORY_COVID('binary_target', root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit', seed=seed)
         elif self == DatasetEnum.covid_multi:
@@ -413,7 +413,7 @@ class DatasetEnum(enum.Enum):
         if self == DatasetEnum.cinic10:
             optimizer = optim.Adam(model.parameters(), lr=1e-4)
         elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
-            optimizer = optim.Adam(model.parameters(), lr=1e-4)
+            optimizer = optim.Adam(model.parameters(), lr=1e-3)
         elif self == DatasetEnum.covid_binary or self == DatasetEnum.covid_multi:
             optimizer = optim.Adam(model.parameters(), lr=1e-3)
         else:
@@ -445,10 +445,19 @@ class DatasetEnum(enum.Enum):
             desc,
             log_interval,
             device,
+            gpu_count,
             num_classes=num_classes,
             epoch_results_store=None,
     ):
+        # define model and make it run on multiple GPUs if possible
         model = self.create_bayesian_model(device)
+        if gpu_count > 1:
+            model = nn.DataParallel(model)
+            print('Model is using', torch.cuda.device_count(), 'GPUs.')
+        else:
+            print('Only one GPU is available or none.')
+
+
         optimizer = self.create_optimizer(model)
         # lr_scheduler = self.create_lr_scheduler(optimizer)
         num_epochs, test_metrics = train_model(
@@ -468,6 +477,7 @@ class DatasetEnum(enum.Enum):
             # lr_scheduler=lr_scheduler,
             num_lr_epochs=1,
             **self.create_train_model_extra_args(optimizer),
+            gpu_count=gpu_count
         )
         return model, num_epochs, test_metrics
 

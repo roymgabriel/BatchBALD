@@ -74,7 +74,10 @@ class SamplerModel(nn.Module):
     def __init__(self, bayesian_net: mc_dropout.BayesianModule, k):
         super().__init__()
         self.bayesian_net = bayesian_net
-        self.num_classes = bayesian_net.num_classes
+        try:
+            self.num_classes = bayesian_net.module.num_classes
+        except:
+            self.num_classes = bayesian_net.num_classes
         self.k = k
 
     def forward(self, input: torch.Tensor):

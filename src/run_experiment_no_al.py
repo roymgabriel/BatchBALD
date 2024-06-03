@@ -1,7 +1,7 @@
 import argparse
 import functools
 import itertools
-
+import multiprocessing
 import torch
 
 import torch.utils.data as data
@@ -99,7 +99,7 @@ def main():
 
     print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 19, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": multiprocessing.cpu_count() - 1, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
 
@@ -171,6 +171,8 @@ def main():
         device=device,
         num_classes=dataset.num_classes,
         epoch_results_store=store,
+        # gpu_count=torch.cuda.device_count()
+        gpu_count=1
     )
 
 

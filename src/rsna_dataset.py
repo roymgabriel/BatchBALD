@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 from torch.utils.data import Dataset
-from sklearn.preprocessing import LabelEncoder
 from torchvision.io import read_image
 
 class RSNAPneumoniaDataset(Dataset):
@@ -10,7 +9,7 @@ class RSNAPneumoniaDataset(Dataset):
         Args:
             csv_file (string): Path to the csv file with annotations.
             root_dir (string): Directory with all the DICOM images.
-            target_col (string): Target column name (must be one of `Target` or `class`).
+            target_col (string): Target column name (must be one of `Target` or `multiTarget`).
             transform (callable, optional): Optional transform to be applied on a sample.
         """
 
@@ -19,15 +18,11 @@ class RSNAPneumoniaDataset(Dataset):
         self.transform = transform
         self.targets = self.pneumonia_frame[target_col].values
 
-        if target_col.lower() == 'class':
-            encoder = LabelEncoder()
-            self.targets = encoder.fit_transform(self.targets)
-
     def __len__(self):
         return len(self.pneumonia_frame)
 
     def __getitem__(self, idx):
-        image_path = os.path.join(self.root_dir, self.pneumonia_frame.iloc[idx, 1] + '.png')
+        image_path = os.path.join(self.root_dir, self.pneumonia_frame.iloc[idx, 0] + '.png')
         image = read_image(image_path)  # Loads PNG image as a tensor
 
         target = self.targets[idx]

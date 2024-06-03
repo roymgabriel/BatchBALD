@@ -11,7 +11,6 @@ from sampler_model import SamplerModel, NoDropoutModel
 from typing import NamedTuple
 
 from metrics_utils import *
-
 from torch.profiler import profile, record_function, ProfilerActivity
 
 
@@ -21,16 +20,24 @@ class TrainModelResult(NamedTuple):
 
 
 def build_metrics(num_classes, test_dtype=None):
-    # NOTE: COVID WEIGHTS ONLY
+    # # NOTE: COVID WEIGHTS ONLY
+    # if num_classes == 2:
+    #     # for binary classes
+    #     class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
+    # elif num_classes == 4:
+    #     # Uncomment this for multi (mild included)
+    #     class_weights = torch.tensor([1/0.34765625, 1/0.3031851 , 1/0.25120192, 1/0.09795673], dtype=torch.float)
+    # elif num_classes == 3:
+    #     # Use this for multi (mild omitted)
+    #     class_weights = torch.tensor([1/0.498922, 1/0.360500 , 1/0.140578], dtype=torch.float)
+
+    # NOTE: RSNA WEIGHTS ONLY
     if num_classes == 2:
         # for binary classes
-        class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
-    elif num_classes == 4:
-        # Uncomment this for multi (mild included)
-        class_weights = torch.tensor([1/0.34765625, 1/0.3031851 , 1/0.25120192, 1/0.09795673], dtype=torch.float)
+        class_weights = torch.tensor([1/0.683892, 1/0.316108], dtype=torch.float)
     elif num_classes == 3:
-        # Use this for multi (mild omitted)
-        class_weights = torch.tensor([1/0.498922, 1/0.360500 , 1/0.140578], dtype=torch.float)
+        # Use this for multi
+        class_weights = torch.tensor([1/0.316108, 1/0.391074 , 1/0.292818], dtype=torch.float)
 
     class_weights = class_weights / class_weights.sum()  # Normalize weights
 
@@ -60,24 +67,43 @@ def train_model(
     desc,
     device,
     num_classes,
+    gpu_count,
     lr_scheduler: optim.lr_scheduler._LRScheduler = None,
     num_lr_epochs=0,
     epoch_results_store=None,
 ) -> TrainModelResult:
-    test_sampler = SamplerModel(model, k=min(num_inference_samples, 100)).to(device)
-    validation_sampler = NoDropoutModel(model).to(device)
-    training_sampler = SamplerModel(model, k=1).to(device)
+    if gpu_count > 1:
+        model = nn.DataParallel(model)
+        print('Using', torch.cuda.device_count(), 'GPUs.')
+    else:
+        print('Using a single GPU or CPU.')
 
-    # NOTE: COVID WEIGHTS ONLY
+    # Ensure the model is on the correct device
+    # model = model.to(device)
+
+    test_sampler = SamplerModel(model.module if gpu_count > 1 else model, k=min(num_inference_samples, 100)).to(device)
+    validation_sampler = NoDropoutModel(model.module if gpu_count > 1 else model).to(device)
+    training_sampler = SamplerModel(model.module if gpu_count > 1 else model, k=1).to(device)
+
+
+    # # NOTE: COVID WEIGHTS ONLY
+    # if num_classes == 2:
+    #     # for binary classes
+    #     class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
+    # elif num_classes == 4:
+    #     # Uncomment this for multi (mild included)
+    #     class_weights = torch.tensor([1/0.34765625, 1/0.3031851 , 1/0.25120192, 1/0.09795673], dtype=torch.float)
+    # elif num_classes == 3:
+    #     # Use this for multi (mild omitted)
+    #     class_weights = torch.tensor([1/0.498922, 1/0.360500 , 1/0.140578], dtype=torch.float)
+
+    # NOTE: RSNA WEIGHTS ONLY
     if num_classes == 2:
         # for binary classes
-        class_weights = torch.tensor([1/0.140578, 1/0.859422], dtype=torch.float)
-    elif num_classes == 4:
-        # Uncomment this for multi (mild included)
-        class_weights = torch.tensor([1/0.34765625, 1/0.3031851 , 1/0.25120192, 1/0.09795673], dtype=torch.float)
+        class_weights = torch.tensor([1/0.683892, 1/0.316108], dtype=torch.float)
     elif num_classes == 3:
-        # Use this for multi (mild omitted)
-        class_weights = torch.tensor([1/0.498922, 1/0.360500 , 1/0.140578], dtype=torch.float)
+        # Use this for multi
+        class_weights = torch.tensor([1/0.316108, 1/0.391074 , 1/0.292818], dtype=torch.float)
 
     class_weights = class_weights / class_weights.sum()  # Normalize weights
 
@@ -116,9 +142,9 @@ def train_model(
 
     restoring_score_guard = ignite_restoring_score_guard.RestoringScoreGuard(
         patience=early_stopping_patience,
-        score_function=lambda engine: engine.state.metrics["accuracy"],
+        score_function=lambda engine: engine.state.metrics["f1"],
         out_of_patience_callback=out_of_patience,
-        module=model,
+        module=model.module if gpu_count > 1 else model,
         optimizer=optimizer,
         training_engine=trainer,
         validation_engine=validation_evaluator,
