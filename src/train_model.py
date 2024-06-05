@@ -142,7 +142,7 @@ def train_model(
 
     restoring_score_guard = ignite_restoring_score_guard.RestoringScoreGuard(
         patience=early_stopping_patience,
-        score_function=lambda engine: engine.state.metrics["f1"],
+        score_function=lambda engine: engine.state.metrics["accuracy"],
         out_of_patience_callback=out_of_patience,
         module=model.module if gpu_count > 1 else model,
         optimizer=optimizer,

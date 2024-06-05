@@ -51,9 +51,14 @@ def plot_aggregated_values(
                 mainplot_args["linestyle"] = ""
 
             axes.plot(agg.quantile_sample_points, agg.quantiles[1], label=label, **mainplot_args)
-            axes.plot(agg.quantile_sample_points, agg.quantiles[0], **colorargs, alpha=0.5)
-            axes.plot(agg.quantile_sample_points, agg.quantiles[2], **colorargs, alpha=0.5)
+            # axes.plot(agg.quantile_sample_points, agg.quantiles[0], **colorargs, alpha=0.5)
+            # axes.plot(agg.quantile_sample_points, agg.quantiles[2], **colorargs, alpha=0.5)
             axes.fill_between(agg.quantile_sample_points, agg.quantiles[0], agg.quantiles[2], **colorargs, alpha=0.1)
+
+            # Remove the border lines if desired
+            plt.gca().spines['top'].set_visible(False)
+            plt.gca().spines['right'].set_visible(False)
+
 
         print(f"{label}:")
         for threshold, quantiles in zip(agg.thresholds, agg.threshold_quantiles):
