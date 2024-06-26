@@ -5,7 +5,7 @@ import numpy as np
 from acquisition_batch import AcquisitionBatch
 from reduced_consistent_mc_sampler import reduced_eval_consistent_bayesian_model
 from acquisition_functions import AcquisitionFunction
-
+from torch_utils import is_main_process
 
 def get_top_n(scores: np.ndarray, n):
     top_n = np.argpartition(scores, -n)[-n:]
@@ -47,13 +47,15 @@ def compute_acquisition_bag(
         # Map our indices to the available_loader dataset.
         top_k_indices = subset_split.get_dataset_indices(top_k_indices.numpy())
 
-        print(f"Acquisition bag: {top_k_indices}")
-        print(f"Scores: {top_k_scores}")
+        if is_main_process():
+            print(f"Acquisition bag: {top_k_indices}")
+            print(f"Scores: {top_k_scores}")
 
         return AcquisitionBatch(top_k_indices, top_k_scores, None)
     else:
         picked_indices = torch.randperm(len(available_loader.dataset))[:b].numpy()
 
-        print(f"Acquisition bag: {picked_indices}")
+        if is_main_process():
+            print(f"Acquisition bag: {picked_indices}")
 
         return AcquisitionBatch(picked_indices, [0.0] * b, None)

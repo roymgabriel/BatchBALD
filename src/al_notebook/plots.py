@@ -55,10 +55,11 @@ def plot_aggregated_values(
             # axes.plot(agg.quantile_sample_points, agg.quantiles[2], **colorargs, alpha=0.5)
             axes.fill_between(agg.quantile_sample_points, agg.quantiles[0], agg.quantiles[2], **colorargs, alpha=0.1)
 
+        
             # Remove the border lines if desired
-            plt.gca().spines['top'].set_visible(False)
-            plt.gca().spines['right'].set_visible(False)
-
+            axes.spines['top'].set_visible(False)
+            axes.spines['right'].set_visible(False)
+    
 
         print(f"{label}:")
         for threshold, quantiles in zip(agg.thresholds, agg.threshold_quantiles):
@@ -69,6 +70,7 @@ def plot_aggregated_values(
                 plt.scatter(quantiles, [threshold / 100] * len(quantiles), **colorargs, alpha=0.7, marker="o")
 
             print(f"{threshold}% at {quantiles}")
+
 
 
 def plot_aggregated_groups_sample_points(

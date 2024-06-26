@@ -12,8 +12,7 @@ from blackhc import laaos
 import blackhc.notebook
 
 import torch_utils
-from dataset_enum import DatasetEnum, get_experiment_data, get_targets
-from train_model import train_model
+from dataset_enum import DatasetEnum, get_experiment_data, get_targets, train_model
 from random_fixed_length_sampler import RandomFixedLengthSampler
 from active_learning_data import ActiveLearningData
 
@@ -21,13 +20,19 @@ import prettyprinter as pp
 import logging
 import sys
 
+import os
+from torch_utils import is_main_process
+import torch.multiprocessing as mp
+from torch.utils.data.distributed import DistributedSampler
+from torch.distributed import init_process_group, destroy_process_group
 
-def main():
+
+def ddp_setup():
+    init_process_group(backend="nccl")
+    torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", 0)))
+
+def create_experiment_config_argparser(parser):
     # Training settings
-    parser = argparse.ArgumentParser(
-        description="Pure training loop without AL",
-        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120),
-    )
     parser.add_argument("--batch_size", type=int, default=64, help="input batch size for training")
     parser.add_argument("--scoring_batch_size", type=int, default=256, help="input batch size for scoring")
     parser.add_argument("--test_batch_size", type=int, default=256, help="input batch size for testing")
@@ -79,6 +84,19 @@ def main():
         default=DatasetEnum.mnist,
         help=f"dataset to use (options: {[f.name for f in DatasetEnum]})",
     )
+    return parser
+
+def main():
+    ddp_setup()
+
+    parser = argparse.ArgumentParser(
+        description="Pure training loop without AL",
+        formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120),
+    )
+    parser.add_argument('--local_rank', type=int, default=0)
+
+    parser = create_experiment_config_argparser(parser)
+
     args = parser.parse_args()
 
     store = laaos.create_file_store(
@@ -87,9 +105,13 @@ def main():
         truncate=False,
         type_handlers=(blackhc.laaos.StrEnumHandler(), blackhc.laaos.ToReprHandler()),
     )
-    store["args"] = args.__dict__
 
-    print(args.__dict__)
+    if is_main_process():
+        store["args"] = args.__dict__
+        store["cmdline"] = sys.argv[:]
+
+        print("|".join(sys.argv))
+        print(args.__dict__)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -97,9 +119,10 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    print(f"Using {device} for computations")
+    if is_main_process():
+        print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": multiprocessing.cpu_count() - 1, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": multiprocessing.cpu_count() - 5, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
 
@@ -122,13 +145,16 @@ def main():
     if not reduced_train_length:
         reduced_train_length = len(experiment_data.available_dataset)
 
-    print(f"Training with reduced dataset of {reduced_train_length} data points")
+    if is_main_process():
+        print(f"Training with reduced dataset of {reduced_train_length} data points")
+
     if not args.balanced_training_set:
         experiment_data.active_learning_data.acquire(
             experiment_data.active_learning_data.get_random_available_indices(reduced_train_length)
         )
     else:
-        print("Using a balanced training set.")
+        if is_main_process():
+            print("Using a balanced training set.")
         num_samples_per_class = reduced_train_length // dataset.num_classes
         experiment_data.active_learning_data.acquire(
             list(
@@ -146,14 +172,19 @@ def main():
         sampler = data.RandomSampler(experiment_data.train_dataset)
 
     test_loader = torch.utils.data.DataLoader(
-        experiment_data.test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
+        experiment_data.test_dataset, batch_size=args.test_batch_size, shuffle=False,
+        sampler=DistributedSampler(experiment_data.test_dataset),
+        **kwargs
     )
     train_loader = torch.utils.data.DataLoader(
-        experiment_data.train_dataset, sampler=sampler, batch_size=args.batch_size, **kwargs
+        experiment_data.train_dataset, sampler=sampler,
+        batch_size=args.batch_size, **kwargs
     )
 
     validation_loader = torch.utils.data.DataLoader(
-        experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
+        experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False,
+        sampler=DistributedSampler(experiment_data.validation_dataset),
+        **kwargs
     )
 
     def desc(name):
@@ -171,10 +202,22 @@ def main():
         device=device,
         num_classes=dataset.num_classes,
         epoch_results_store=store,
-        # gpu_count=torch.cuda.device_count()
-        gpu_count=1
+        gpu_count=torch.cuda.device_count(),
+        # gpu_count=1,
+        gpu_id=int(os.environ["LOCAL_RANK"]),
     )
+
+    destroy_process_group()
+    print("DONE")
 
 
 if __name__ == "__main__":
+    import os
+    # Set NCCL_P2P_DISABLE environment variable
+    # os.environ['NCCL_P2P_DISABLE'] = '1'
+
+    # Set OMP_NUM_THREADS to a desired value
+    # os.environ["OMP_NUM_THREADS"] = "1"
+
+    #!/usr/bin/env python3
     main()

@@ -7,6 +7,7 @@ from acquisition_method import AcquisitionMethod
 from context_stopwatch import ContextStopwatch
 from dataset_enum import DatasetEnum, get_targets, get_experiment_data, train_model
 from random_fixed_length_sampler import RandomFixedLengthSampler
+
 from torch_utils import get_base_indices
 import torch.utils.data as data
 
@@ -21,7 +22,14 @@ import functools
 import itertools
 
 import os
+from torch_utils import is_main_process
+import torch.multiprocessing as mp
+from torch.utils.data.distributed import DistributedSampler
+from torch.distributed import init_process_group, destroy_process_group
 
+def ddp_setup():
+    init_process_group(backend="nccl")
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
 
 def create_experiment_config_argparser(parser):
@@ -127,9 +135,12 @@ def create_experiment_config_argparser(parser):
 
 
 def main():
+    ddp_setup()
+
     parser = argparse.ArgumentParser(
         description="BatchBALD", formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)
     )
+    parser.add_argument('--local_rank', type=int, default=0)
     parser.add_argument("--experiment_task_id", type=str, default=None, help="experiment id")
     parser.add_argument(
         "--experiments_laaos", type=str, default=None, help="Laaos file that contains all experiment task configs"
@@ -165,11 +176,12 @@ def main():
         truncate=False,
         type_handlers=(blackhc.laaos.StrEnumHandler(), blackhc.laaos.ToReprHandler()),
     )
-    store["args"] = args.__dict__
-    store["cmdline"] = sys.argv[:]
+    if is_main_process():
+        store["args"] = args.__dict__
+        store["cmdline"] = sys.argv[:]
 
-    print("|".join(sys.argv))
-    print(args.__dict__)
+        print("|".join(sys.argv))
+        print(args.__dict__)
 
     acquisition_method: AcquisitionMethod = args.acquisition_method
 
@@ -179,9 +191,10 @@ def main():
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    print(f"Using {device} for computations")
+    if is_main_process():
+        print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": multiprocessing.cpu_count() - 1, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": multiprocessing.cpu_count() - 5, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
     samples_per_class = args.initial_samples_per_class
@@ -202,7 +215,10 @@ def main():
     )
 
     test_loader = torch.utils.data.DataLoader(
-        experiment_data.test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
+        experiment_data.test_dataset, batch_size=args.test_batch_size,
+        sampler=DistributedSampler(experiment_data.test_dataset),
+        shuffle=False,
+        **kwargs
     )
 
     train_loader = torch.utils.data.DataLoader(
@@ -213,18 +229,23 @@ def main():
     )
 
     available_loader = torch.utils.data.DataLoader(
-        experiment_data.available_dataset, batch_size=args.scoring_batch_size, shuffle=False, **kwargs
+        experiment_data.available_dataset, batch_size=args.scoring_batch_size, shuffle=False,
+        sampler=DistributedSampler(experiment_data.available_dataset),
+        **kwargs
     )
 
     validation_loader = torch.utils.data.DataLoader(
-        experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs
+        experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False,
+        sampler=DistributedSampler(experiment_data.validation_dataset),
+        **kwargs
     )
 
     store["iterations"] = []
     # store wraps the empty list in a storable list, so we need to fetch it separately.
     iterations = store["iterations"]
 
-    store["initial_samples"] = experiment_data.initial_samples
+    if is_main_process():
+        store["initial_samples"] = experiment_data.initial_samples
 
     acquisition_function: AcquisitionFunction = args.type
     max_epochs = args.epochs
@@ -250,8 +271,9 @@ def main():
                 log_interval,
                 device,
                 num_classes=dataset.num_classes,
-                # gpu_count=torch.cuda.device_count()
-                gpu_count=1
+                gpu_count=torch.cuda.device_count(),
+                # gpu_count=1,
+                gpu_id=int(os.environ["LOCAL_RANK"]),
             )
 
         with ContextStopwatch() as batch_acquisition_stopwatch:
@@ -270,10 +292,12 @@ def main():
             )
 
         original_batch_indices = get_base_indices(experiment_data.available_dataset, batch.indices)
-        print(f"Acquiring indices {original_batch_indices}")
+        if is_main_process():
+            print(f"Acquiring indices {original_batch_indices}")
         targets = get_targets(experiment_data.available_dataset)
         acquired_targets = [int(targets[index]) for index in batch.indices]
-        print(f"Acquiring targets {acquired_targets}")
+        if is_main_process():
+            print(f"Acquiring targets {acquired_targets}")
 
         iterations.append(
             dict(
@@ -293,16 +317,25 @@ def main():
         num_acquired_samples = len(experiment_data.active_learning_data.active_dataset) - len(
             experiment_data.initial_samples
         )
-        if num_acquired_samples >= args.target_num_acquired_samples:
+        if num_acquired_samples >= args.target_num_acquired_samples and is_main_process():
             print(f"{num_acquired_samples} acquired samples >= {args.target_num_acquired_samples}")
             break
-        if test_metrics["accuracy"] >= args.target_accuracy:
+        if test_metrics["accuracy"] >= args.target_accuracy and is_main_process():
             print(f'accuracy {test_metrics["accuracy"]} >= {args.target_accuracy}')
             break
 
+    destroy_process_group()
     print("DONE")
 
 
 if __name__ == "__main__":
+    import os
+    # Set NCCL_P2P_DISABLE environment variable
+    # os.environ['NCCL_P2P_DISABLE'] = '1'
+
+    # Set OMP_NUM_THREADS to a desired value
+    # os.environ["OMP_NUM_THREADS"] = "1"
+
     #!/usr/bin/env python3
     main()
+

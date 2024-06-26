@@ -1,6 +1,6 @@
 import torch
 from ignite.engine import Engine, Events
-
+from torch_utils import is_main_process
 import pickle
 
 
@@ -77,11 +77,13 @@ class RestoringScoreGuard(object):
 
     def restore_best(self):
         if self.best_module_state_dict is not None and self.module is not None:
-            print(f"RestoringScoreGuard: Restoring best parameters. (Score: {self.best_score})")
+            if is_main_process():
+                print(f"RestoringScoreGuard: Restoring best parameters. (Score: {self.best_score})")
             self.module.load_state_dict(pickle.loads(self.best_module_state_dict))
 
         if self.best_optimizer_state_dict is not None and self.optimizer is not None:
-            print("RestoringScoreGuard: Restoring optimizer.")
+            if is_main_process():
+                print("RestoringScoreGuard: Restoring optimizer.")
             self.optimizer.load_state_dict(pickle.loads(self.best_optimizer_state_dict))
 
     def on_epoch_completed(self, _):
@@ -89,9 +91,11 @@ class RestoringScoreGuard(object):
 
         if self.best_score is not None and score <= self.best_score:
             self.counter += 1
-            print("RestoringScoreGuard: %i / %i" % (self.counter, self.patience))
+            if is_main_process():
+                print("RestoringScoreGuard: %i / %i" % (self.counter, self.patience))
             if self.counter >= self.patience:
-                print("RestoringScoreGuard: Out of patience")
+                if is_main_process():
+                    print("RestoringScoreGuard: Out of patience")
                 self.restore_best()
                 self.restore_epoch = self.training_engine.state.epoch
 

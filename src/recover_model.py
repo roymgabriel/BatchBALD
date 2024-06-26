@@ -8,12 +8,14 @@ import torch
 from torch import nn
 
 import torch.utils.data as data
-
+import multiprocessing
+from torch_utils import is_main_process
 from random_fixed_length_sampler import RandomFixedLengthSampler
 from train_model import train_model
 from active_learning_data import ActiveLearningData
 from collections import namedtuple
 from typing import NamedTuple
+import os
 
 
 class Loaders(NamedTuple):
@@ -78,9 +80,10 @@ def recover_model(laaos_store, target_iteration=None):
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    print(f"Using {device} for computations")
+    if is_main_process():
+        print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": 20, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": multiprocessing.cpu_count() - 10, "pin_memory": True} if use_cuda else {}
 
     dataset: dataset_enum.DatasetEnum = args.dataset
     experiment_data = dataset_enum.get_experiment_data(

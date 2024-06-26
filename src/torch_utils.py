@@ -7,11 +7,14 @@ import numpy as np
 import math
 import typing
 import gc
+import os
 
 from torch.utils.data import Subset, Dataset
 
 DEBUG_CHECKS = False
 
+def is_main_process():
+    return int(os.environ.get("LOCAL_RANK", 0)) == 0
 
 def gc_cuda():
     gc.collect()
@@ -220,4 +223,6 @@ def gather_expand(data, dim, index):
 
 def split_tensors(output, input, chunk_size):
     assert len(output) == len(input)
+    if chunk_size == 0:
+        chunk_size = 8192
     return list(zip(output.split(chunk_size), input.split(chunk_size)))

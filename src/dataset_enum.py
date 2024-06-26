@@ -30,6 +30,11 @@ from sklearn.model_selection import train_test_split
 
 from emorycovid_dataset import EmoryCOVIDDataset
 
+from torch.nn.parallel import DistributedDataParallel as DDP
+import os
+# from torch.distributed import init_process_group, destroy_process_group
+from torch_utils import is_main_process
+
 
 @dataclass
 class ExperimentData:
@@ -173,8 +178,8 @@ def get_EMORY_COVID(target_col, root="./", train_pct=70, val_pct=10, test_pct=20
         )
     elif data_type == 'mild_merged':
         full_dataset = EmoryCOVIDDataset(
-            # mild_merged_dataset
-            csv_file=covid_directory + '/mild_dataset.csv',
+            # mild_merged_dataset has 4 class labels
+            csv_file=covid_directory + '/mild_merged_dataset.csv',
             root_dir=covid_directory + '/imgs',
             target_col=target_col,
             transform=rsna_transform,
@@ -376,8 +381,8 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.rsna_multi:
             return 3
         elif self == DatasetEnum.covid_multi:
-            # 4
-            return 3
+            # 4 if mild_merged_dataset else 3
+            return 4
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -415,7 +420,10 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.rsna_binary or self == DatasetEnum.rsna_multi:
             optimizer = optim.Adam(model.parameters(), lr=1e-3)
         elif self == DatasetEnum.covid_binary or self == DatasetEnum.covid_multi:
+            # if single GPU
             optimizer = optim.Adam(model.parameters(), lr=1e-3)
+            # if dual GPU
+            optimizer = optim.Adam(model.parameters(), lr=1e-3*2)
         else:
             optimizer = optim.Adam(model.parameters())
         return optimizer
@@ -446,14 +454,16 @@ class DatasetEnum(enum.Enum):
             log_interval,
             device,
             gpu_count,
+            gpu_id=int(os.environ["LOCAL_RANK"]),
             num_classes=num_classes,
             epoch_results_store=None,
     ):
         # define model and make it run on multiple GPUs if possible
         model = self.create_bayesian_model(device)
         if gpu_count > 1:
-            model = nn.DataParallel(model)
-            print('Model is using', torch.cuda.device_count(), 'GPUs.')
+            # model = nn.DataParallel(model)
+            model = model.to(gpu_id)
+            model = DDP(model, device_ids=[gpu_id])
         else:
             print('Only one GPU is available or none.')
 
@@ -477,7 +487,9 @@ class DatasetEnum(enum.Enum):
             # lr_scheduler=lr_scheduler,
             num_lr_epochs=1,
             **self.create_train_model_extra_args(optimizer),
-            gpu_count=gpu_count
+            gpu_count=gpu_count,
+            gpu_id=int(os.environ["LOCAL_RANK"]),
+
         )
         return model, num_epochs, test_metrics
 
@@ -513,14 +525,16 @@ def get_experiment_data(
     active_learning_data.acquire(initial_samples)
 
     if validation_dataset is None:
-        print("Acquiring validation set from training set.")
+        if is_main_process():
+            print("Acquiring validation set from training set.")
         if not validation_set_size:
             validation_set_size = len(test_dataset)
 
         if not balanced_validation_set:
             validation_dataset = active_learning_data.extract_dataset(validation_set_size)
         else:
-            print("Using a balanced validation set")
+            if is_main_process():
+                print("Using a balanced validation set")
             validation_dataset = active_learning_data.extract_dataset_from_indices(
                 balance_dataset_by_repeating(
                     active_learning_data.available_dataset, num_classes, validation_set_size, upsample=False
@@ -528,35 +542,42 @@ def get_experiment_data(
             )
     else:
         if validation_set_size == 0:
-            print("Using provided validation set.")
+            if is_main_process():
+                print("Using provided validation set.")
             validation_set_size = len(validation_dataset)
         if validation_set_size < len(validation_dataset):
-            print("Shrinking provided validation set.")
+            if is_main_process():
+                print("Shrinking provided validation set.")
             if not balanced_validation_set:
                 validation_dataset = data.Subset(
                     validation_dataset, torch.randperm(len(validation_dataset))[:validation_set_size].tolist()
                 )
-                store['Using a balanced validation set:'] = False
+                if is_main_process():
+                    store['Using a balanced validation set:'] = False
             else:
-                print("Using a balanced validation set")
+                if is_main_process():
+                    print("Using a balanced validation set")
                 validation_dataset = data.Subset(
                     validation_dataset,
                     balance_dataset_by_repeating(validation_dataset, num_classes, validation_set_size, upsample=False),
                 )
-                store['Using a balanced validation set:'] = True
+                if is_main_process():
+                    store['Using a balanced validation set:'] = True
 
     if balanced_test_set:
-        print("Using a balanced test set")
-        print("Distribution of original test set classes:")
+        if is_main_process():
+            print("Using a balanced test set")
+            print("Distribution of original test set classes:")
         classes = get_target_bins(test_dataset)
-        print(classes)
+        if is_main_process():
+            print(classes)
 
         test_dataset = data.Subset(
             test_dataset, balance_dataset_by_repeating(test_dataset, num_classes, len(test_dataset))
         )
-
-        store['USING BALANCED DATASET'] = True
-        store['Distribution of original test set classes:'] = classes
+        if is_main_process():
+            store['USING BALANCED DATASET'] = True
+            store['Distribution of original test set classes:'] = classes
 
     if reduced_dataset:
         # Let's assume we won't use more than 1000 elements for our validation set.
@@ -565,11 +586,12 @@ def get_experiment_data(
         if validation_dataset:
             validation_dataset = subrange_dataset.SubrangeDataset(validation_dataset, 0,
                                                                   len(validation_dataset) // 10)
-        print("USING REDUCED DATASET!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        store['USING REDUCED DATASET'] = True
+        if is_main_process():
+            print("USING REDUCED DATASET!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            store['USING REDUCED DATASET'] = True
 
     show_class_frequencies = True
-    if show_class_frequencies:
+    if show_class_frequencies and is_main_process():
         print("Distribution of training set classes:")
         classes = get_target_bins(train_dataset)
         print(classes)
@@ -595,17 +617,18 @@ def get_experiment_data(
         print(classes)
         store['Distribution of active set classes:'] = classes
 
-    print(f"Dataset info:")
-    print(f"\t{len(active_learning_data.active_dataset)} active samples")
-    print(f"\t{len(active_learning_data.available_dataset)} available samples")
-    print(f"\t{len(validation_dataset)} validation samples")
-    print(f"\t{len(test_dataset)} test samples")
+    if is_main_process():
+        print(f"Dataset info:")
+        print(f"\t{len(active_learning_data.active_dataset)} active samples")
+        print(f"\t{len(active_learning_data.available_dataset)} available samples")
+        print(f"\t{len(validation_dataset)} validation samples")
+        print(f"\t{len(test_dataset)} test samples")
 
-    # store results in log file
-    store['active samples'] = len(active_learning_data.active_dataset)
-    store['available samples'] = len(active_learning_data.available_dataset)
-    store['validation samples'] = len(validation_dataset)
-    store['test samples'] = len(test_dataset)
+        # store results in log file
+        store['active samples'] = len(active_learning_data.active_dataset)
+        store['available samples'] = len(active_learning_data.available_dataset)
+        store['validation samples'] = len(validation_dataset)
+        store['test samples'] = len(test_dataset)
 
     if data_source.shared_transform is not None or data_source.train_transform is not None:
         train_dataset = TransformedDataset(
@@ -679,8 +702,9 @@ def balance_dataset_by_repeating(dataset, num_classes, target_size, upsample=Tru
         )
     )
 
-    print(
-        f"Resampled dataset ({len(dataset)} samples) to a balanced set of {len(balanced_samples_indices)} samples!")
+    if is_main_process():
+        print(
+            f"Resampled dataset ({len(dataset)} samples) to a balanced set of {len(balanced_samples_indices)} samples!")
 
     return balanced_samples_indices
 

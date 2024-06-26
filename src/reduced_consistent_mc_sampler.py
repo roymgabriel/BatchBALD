@@ -57,7 +57,8 @@ def reduced_eval_consistent_bayesian_model(
         subset_split.available_dataset, shuffle=False, batch_size=available_loader.batch_size
     )
 
-    print(f"Scoring subset of {len(subset_dataloader.dataset)} items:")
+    if torch_utils.is_main_process():
+        print(f"Scoring subset of {len(subset_dataloader.dataset)} items:")
 
     # We're done with available_loader in this function.
     available_loader = None

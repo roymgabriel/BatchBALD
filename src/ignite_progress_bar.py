@@ -1,7 +1,7 @@
 import torch.utils.data as data
 import ignite
 from blackhc.progress_bar import create_progress_bar
-
+from torch_utils import is_main_process
 
 class IgniteProgressBar(object):
     def __init__(self, desc, log_interval):
@@ -18,17 +18,19 @@ class IgniteProgressBar(object):
         dataloader = engine.state.dataloader
         self.progress_bar = create_progress_bar(len(dataloader) * dataloader.batch_size)
 
-        print(self.desc(engine))
-        self.progress_bar.start()
+        if is_main_process():
+            print(self.desc(engine))
+            self.progress_bar.start()
 
     def on_complete(self, engine):
-        self.progress_bar.finish()
+        if is_main_process():
+            self.progress_bar.finish()
 
     def on_iteration_complete(self, engine):
         dataloader = engine.state.dataloader
         iter = (engine.state.iteration - 1) % len(dataloader) + 1
 
-        if iter % self.log_interval == 0:
+        if iter % self.log_interval == 0 and is_main_process():
             self.progress_bar.update(self.log_interval * dataloader.batch_size)
 
 

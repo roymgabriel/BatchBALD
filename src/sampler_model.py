@@ -64,9 +64,14 @@ class NoDropoutModel(nn.Module):
         self.bayesian_net = bayesian_net
 
     def forward(self, input):
-        self.bayesian_net.set_dropout_p(0)
-        mc_output_B_1_C = self.bayesian_net(input, 1)
-        self.bayesian_net.set_dropout_p(mc_dropout.DROPOUT_PROB)
+        try:
+            self.bayesian_net.module.set_dropout_p(0)
+            mc_output_B_1_C = self.bayesian_net(input, 1)
+            self.bayesian_net.module.set_dropout_p(mc_dropout.DROPOUT_PROB)
+        except:
+            self.bayesian_net.set_dropout_p(0)
+            mc_output_B_1_C = self.bayesian_net(input, 1)
+            self.bayesian_net.set_dropout_p(mc_dropout.DROPOUT_PROB)
         return mc_output_B_1_C.squeeze(1)
 
 
