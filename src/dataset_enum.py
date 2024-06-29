@@ -423,7 +423,7 @@ class DatasetEnum(enum.Enum):
             # if single GPU
             optimizer = optim.Adam(model.parameters(), lr=1e-3)
             # if dual GPU
-            optimizer = optim.Adam(model.parameters(), lr=1e-3*2)
+            # optimizer = optim.Adam(model.parameters(), lr=1e-3*2)
         else:
             optimizer = optim.Adam(model.parameters())
         return optimizer
@@ -454,7 +454,8 @@ class DatasetEnum(enum.Enum):
             log_interval,
             device,
             gpu_count,
-            gpu_id=int(os.environ["LOCAL_RANK"]),
+            # gpu_id=int(os.environ["LOCAL_RANK"]),
+            gpu_id=0,
             num_classes=num_classes,
             epoch_results_store=None,
     ):
@@ -488,7 +489,8 @@ class DatasetEnum(enum.Enum):
             num_lr_epochs=1,
             **self.create_train_model_extra_args(optimizer),
             gpu_count=gpu_count,
-            gpu_id=int(os.environ["LOCAL_RANK"]),
+            # gpu_id=int(os.environ["LOCAL_RANK"]),
+            gpu_id=0,
 
         )
         return model, num_epochs, test_metrics

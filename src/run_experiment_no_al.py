@@ -27,9 +27,9 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 
 
-def ddp_setup():
-    init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", 0)))
+# def ddp_setup():
+#     init_process_group(backend="nccl")
+#     torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", 0)))
 
 def create_experiment_config_argparser(parser):
     # Training settings
@@ -87,7 +87,7 @@ def create_experiment_config_argparser(parser):
     return parser
 
 def main():
-    ddp_setup()
+    # ddp_setup()
 
     parser = argparse.ArgumentParser(
         description="Pure training loop without AL",
@@ -122,7 +122,7 @@ def main():
     if is_main_process():
         print(f"Using {device} for computations")
 
-    kwargs = {"num_workers": multiprocessing.cpu_count() - 5, "pin_memory": True} if use_cuda else {}
+    kwargs = {"num_workers": multiprocessing.cpu_count() - 1, "pin_memory": True} if use_cuda else {}
 
     dataset: DatasetEnum = args.dataset
 
@@ -173,7 +173,7 @@ def main():
 
     test_loader = torch.utils.data.DataLoader(
         experiment_data.test_dataset, batch_size=args.test_batch_size, shuffle=False,
-        sampler=DistributedSampler(experiment_data.test_dataset),
+        # sampler=DistributedSampler(experiment_data.test_dataset),
         **kwargs
     )
     train_loader = torch.utils.data.DataLoader(
@@ -183,7 +183,7 @@ def main():
 
     validation_loader = torch.utils.data.DataLoader(
         experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False,
-        sampler=DistributedSampler(experiment_data.validation_dataset),
+        # sampler=DistributedSampler(experiment_data.validation_dataset),
         **kwargs
     )
 
@@ -202,13 +202,14 @@ def main():
         device=device,
         num_classes=dataset.num_classes,
         epoch_results_store=store,
-        gpu_count=torch.cuda.device_count(),
-        # gpu_count=1,
-        gpu_id=int(os.environ["LOCAL_RANK"]),
+        # gpu_count=torch.cuda.device_count(),
+        gpu_count=1,
+        # gpu_id=int(os.environ["LOCAL_RANK"]),
+        gpu_id=0,
     )
 
-    destroy_process_group()
-    print("DONE")
+    # destroy_process_group()
+    # print("DONE")
 
 
 if __name__ == "__main__":

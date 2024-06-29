@@ -27,9 +27,9 @@ import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 
-def ddp_setup():
-    init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+# def ddp_setup():
+#     init_process_group(backend="nccl")
+#     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
 
 def create_experiment_config_argparser(parser):
@@ -135,7 +135,7 @@ def create_experiment_config_argparser(parser):
 
 
 def main():
-    ddp_setup()
+    # ddp_setup()
 
     parser = argparse.ArgumentParser(
         description="BatchBALD", formatter_class=functools.partial(argparse.ArgumentDefaultsHelpFormatter, width=120)
@@ -216,7 +216,7 @@ def main():
 
     test_loader = torch.utils.data.DataLoader(
         experiment_data.test_dataset, batch_size=args.test_batch_size,
-        sampler=DistributedSampler(experiment_data.test_dataset),
+        # sampler=DistributedSampler(experiment_data.test_dataset),
         shuffle=False,
         **kwargs
     )
@@ -230,13 +230,13 @@ def main():
 
     available_loader = torch.utils.data.DataLoader(
         experiment_data.available_dataset, batch_size=args.scoring_batch_size, shuffle=False,
-        sampler=DistributedSampler(experiment_data.available_dataset),
+        # sampler=DistributedSampler(experiment_data.available_dataset),
         **kwargs
     )
 
     validation_loader = torch.utils.data.DataLoader(
         experiment_data.validation_dataset, batch_size=args.test_batch_size, shuffle=False,
-        sampler=DistributedSampler(experiment_data.validation_dataset),
+        # sampler=DistributedSampler(experiment_data.validation_dataset),
         **kwargs
     )
 
@@ -271,9 +271,10 @@ def main():
                 log_interval,
                 device,
                 num_classes=dataset.num_classes,
-                gpu_count=torch.cuda.device_count(),
-                # gpu_count=1,
-                gpu_id=int(os.environ["LOCAL_RANK"]),
+                # gpu_count=torch.cuda.device_count(),
+                gpu_count=1,
+                # gpu_id=int(os.environ["LOCAL_RANK"]),
+                gpu_id=0,
             )
 
         with ContextStopwatch() as batch_acquisition_stopwatch:
@@ -324,8 +325,8 @@ def main():
             print(f'accuracy {test_metrics["accuracy"]} >= {args.target_accuracy}')
             break
 
-    destroy_process_group()
-    print("DONE")
+    # destroy_process_group()
+    # print("DONE")
 
 
 if __name__ == "__main__":
