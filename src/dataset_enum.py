@@ -358,7 +358,7 @@ class DatasetEnum(enum.Enum):
         elif self == DatasetEnum.covid_binary:
             return get_EMORY_COVID('binary_target', root="./", train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit', seed=seed)
         elif self == DatasetEnum.covid_multi:
-            return get_EMORY_COVID('Median', root="./",train_pct=70, val_pct=10, test_pct=20, data_type='mild_merged', seed=seed)
+            return get_EMORY_COVID('Median', root="./",train_pct=70, val_pct=10, test_pct=20, data_type='mild_omit', seed=seed)
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
@@ -382,7 +382,7 @@ class DatasetEnum(enum.Enum):
             return 3
         elif self == DatasetEnum.covid_multi:
             # 4 if mild_merged_dataset else 3
-            return 4
+            return 3
         else:
             raise NotImplementedError(f"Unknown dataset {self}!")
 
