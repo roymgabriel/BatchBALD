@@ -50,7 +50,7 @@ class MBConvBlock(nn.Module):
 
         return x
 
-c# Assuming MBConvBlock is defined as previously described
+# Assuming MBConvBlock is defined as previously described
 
 class EffNet(mc_dropout.BayesianModule):
     def __init__(self, cfg, num_classes=1000, init_weights=True):

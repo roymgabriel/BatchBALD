@@ -223,7 +223,6 @@ def load_laaos_files(path=None, files=None, vanilla=False, tag=None, prefix=None
 
     stores = {}
     for name, path in files.items():
-
         def nan():
             pass
 
